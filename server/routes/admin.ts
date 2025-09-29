@@ -516,7 +516,7 @@ router.delete("/menu-items/:id", async (req, res) => {
 // إدارة الطلبات
 router.get("/orders", async (req, res) => {
   try {
-    const { page = 1, limit = 20, status, search } = req.query;
+    const { page = 1, limit = 20, status, search, driverId } = req.query;
 
     let allOrders = await storage.getOrders();
     
@@ -525,12 +525,18 @@ router.get("/orders", async (req, res) => {
       allOrders = allOrders.filter(order => order.status === status);
     }
     
+    // فلترة حسب السائق
+    if (driverId) {
+      allOrders = allOrders.filter(order => order.driverId === driverId);
+    }
+    
     if (search) {
       const searchTerm = (search as string).toLowerCase();
       allOrders = allOrders.filter(order => 
         order.orderNumber?.toLowerCase().includes(searchTerm) ||
         order.customerName?.toLowerCase().includes(searchTerm) ||
-        order.customerPhone?.toLowerCase().includes(searchTerm)
+        order.customerPhone?.toLowerCase().includes(searchTerm) ||
+        order.deliveryAddress?.toLowerCase().includes(searchTerm)
       );
     }
 
@@ -544,8 +550,41 @@ router.get("/orders", async (req, res) => {
     const endIndex = startIndex + Number(limit);
     const paginatedOrders = sortedOrders.slice(startIndex, endIndex);
 
+    // إضافة معلومات إضافية لكل طلب
+    const enhancedOrders = await Promise.all(paginatedOrders.map(async (order) => {
+      let restaurantName = 'مطعم غير معروف';
+      let driverName = null;
+      
+      if (order.restaurantId) {
+        try {
+          const restaurant = await storage.getRestaurant(order.restaurantId);
+          if (restaurant) {
+            restaurantName = restaurant.name;
+          }
+        } catch (error) {
+          console.error('خطأ في جلب معلومات المطعم:', error);
+        }
+      }
+      
+      if (order.driverId) {
+        try {
+          const driver = await storage.getDriver(order.driverId);
+          if (driver) {
+            driverName = driver.name;
+          }
+        } catch (error) {
+          console.error('خطأ في جلب معلومات السائق:', error);
+        }
+      }
+      
+      return {
+        ...order,
+        restaurantName,
+        driverName
+      };
+    }));
     res.json({
-      orders: paginatedOrders,
+      orders: enhancedOrders,
       pagination: {
         page: Number(page),
         limit: Number(limit),

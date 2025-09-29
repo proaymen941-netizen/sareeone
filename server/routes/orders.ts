@@ -184,6 +184,26 @@ router.get("/", async (req, res) => {
   }
 });
 
+// جلب الطلبات المتاحة للسائقين
+router.get("/available", async (req, res) => {
+  try {
+    const orders = await storage.getOrders();
+    const availableOrders = orders.filter(order => 
+      order.status === 'confirmed' && !order.driverId
+    );
+    
+    // ترتيب حسب الوقت (الأقدم أولاً)
+    availableOrders.sort((a, b) => 
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+    
+    res.json(availableOrders);
+  } catch (error) {
+    console.error("خطأ في جلب الطلبات المتاحة:", error);
+    res.status(500).json({ error: "خطأ في الخادم" });
+  }
+});
+
 // تعيين طلب لسائق
 router.put("/:id/assign-driver", async (req, res) => {
   try {
