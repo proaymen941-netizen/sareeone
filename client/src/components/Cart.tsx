@@ -122,18 +122,19 @@ export function Cart({ isOpen, onClose }: CartProps) {
         
         toast({
           title: "تم تأكيد طلبك بنجاح! 🎉",
-          description: `رقم الطلب: ${order.order?.orderNumber || order.orderNumber}`,
+          description: `رقم الطلب: ${order.order?.orderNumber || order.orderNumber || 'جديد'}`,
         });
         clearCart();
         onClose();
       } else {
-        throw new Error('فشل في إرسال الطلب');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'فشل في إرسال الطلب');
       }
     } catch (error) {
       console.error('Order error:', error);
       toast({
         title: "خطأ في إرسال الطلب",
-        description: "يرجى المحاولة مرة أخرى",
+        description: error.message || "يرجى المحاولة مرة أخرى",
         variant: "destructive",
       });
     }
