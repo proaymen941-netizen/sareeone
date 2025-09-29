@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Truck, Phone, Lock, Eye, EyeOff } from 'lucide-react';
+import { Loader as Loader2, Truck, Phone, Lock, Eye, EyeOff } from 'lucide-react';
 
 export default function DriverLoginPage() {
   const [, setLocation] = useLocation();
@@ -56,6 +56,12 @@ export default function DriverLoginPage() {
         // حفظ بيانات السائق في localStorage
         localStorage.setItem('driver_token', result.token);
         localStorage.setItem('driver_user', JSON.stringify(result.user));
+        
+        // إضافة toast للنجاح
+        toast({
+          title: "تم تسجيل الدخول بنجاح",
+          description: `مرحباً ${result.user.name}`,
+        });
         
         // إعادة توجيه إلى تطبيق السائق
         setLocation('/driver');

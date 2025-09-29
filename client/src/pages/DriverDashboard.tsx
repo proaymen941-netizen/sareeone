@@ -3,373 +3,138 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
-import { DriverCommunication } from '@/components/DriverCommunication';
-import { 
-  Truck, 
-  MapPin, 
-  Clock, 
-  DollarSign, 
-  LogOut,
-  Navigation,
-  Phone,
-  CheckCircle,
-  XCircle,
-  Package,
-  Bell,
-  User,
-  Calendar,
-  Target,
-  AlertCircle,
-  RefreshCw,
-  Eye,
-  MessageCircle,
-  Store,
-  Map,
-  Activity,
-  TrendingUp,
-  Star,
-  Settings,
-  Zap,
-  Timer,
-  Route,
-  Wallet
-} from 'lucide-react';
+import { Truck, MapPin, Clock, DollarSign, LogOut, Navigation, Phone, CircleCheck as CheckCircle, Circle as XCircle, Package, Settings, TrendingUp, Activity, Bell, User, Calendar, Target, RefreshCw } from 'lucide-react';
 import type { Order, Driver } from '@shared/schema';
 
 interface DriverDashboardProps {
   onLogout: () => void;
 }
 
-interface DriverStats {
-  todayOrders: number;
-  todayEarnings: number;
-  weeklyOrders: number;
-  weeklyEarnings: number;
-  monthlyOrders: number;
-  monthlyEarnings: number;
-  totalOrders: number;
-  totalEarnings: number;
-  completedOrders: number;
-  cancelledOrders: number;
-  averageRating: number;
-  averageDeliveryTime: number;
-  successRate: number;
-}
-
-interface OrderWithDetails extends Order {
-  restaurantName?: string;
-  restaurantPhone?: string;
-  restaurantAddress?: string;
-  estimatedEarnings?: number;
-  distance?: number;
-  priority?: 'high' | 'medium' | 'low';
-}
-
 export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [driverStatus, setDriverStatus] = useState<'available' | 'busy' | 'offline'>('offline');
+  const [driverStatus, setDriverStatus] = useState<boolean>(true);
   const [currentDriver, setCurrentDriver] = useState<Driver | null>(null);
-  const [lastNotificationTime, setLastNotificationTime] = useState<number>(0);
-  const [selectedOrder, setSelectedOrder] = useState<OrderWithDetails | null>(null);
-  const [showOrderDetailsDialog, setShowOrderDetailsDialog] = useState(false);
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [soundEnabled, setSoundEnabled] = useState(true);
-  const [currentLocation, setCurrentLocation] = useState<{lat: number, lng: number} | null>(null);
 
-  // التحقق من تسجيل الدخول عند تحميل المكون
+  // الحصول على معرف السائق من localStorage
+  const getDriverId = () => {
+    const driverUser = localStorage.getItem('driver_user');
+    if (driverUser) {
+      try {
+        const user = JSON.parse(driverUser);
+        return user.id;
+      } catch (error) {
+        console.error('خطأ في تحليل بيانات السائق:', error);
+        return null;
+      }
+    }
+    return null;
+  };
+
+  const driverId = getDriverId();
+
+  // التحقق من تسجيل الدخول
   useEffect(() => {
-    const token = localStorage.getItem('driver_token');
-    const driverData = localStorage.getItem('driver_user');
-    
-    if (!token || !driverData) {
-      window.location.href = '/driver-login';
+    if (!driverId) {
+      toast({
+        title: "غير مصرح",
+        description: "يجب تسجيل الدخول أولاً",
+        variant: "destructive"
+      });
+      onLogout();
       return;
     }
 
-    try {
-      const driver = JSON.parse(driverData);
-      setCurrentDriver(driver);
-      setDriverStatus(driver.isAvailable ? 'available' : 'offline');
-    } catch (error) {
-      console.error('خطأ في تحليل بيانات السائق:', error);
-      handleLogout();
+    // تحميل بيانات السائق من localStorage
+    const savedDriver = localStorage.getItem('driver_user');
+    if (savedDriver) {
+      try {
+        const driverData = JSON.parse(savedDriver);
+        setCurrentDriver(driverData);
+        setDriverStatus(driverData.isAvailable || true);
+      } catch (error) {
+        console.error('خطأ في تحميل بيانات السائق:', error);
+      }
     }
-  }, []);
+  }, [driverId, onLogout, toast]);
 
-  // الحصول على الموقع الحالي
-  useEffect(() => {
-    if (navigator.geolocation) {
-      const watchId = navigator.geolocation.watchPosition(
-        (position) => {
-          setCurrentLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          });
-          
-          // تحديث موقع السائق في الخادم
-          if (currentDriver?.id) {
-            updateDriverLocation(position.coords.latitude, position.coords.longitude);
-          }
-        },
-        (error) => {
-          console.error('خطأ في تتبع الموقع:', error);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 30000
-        }
-      );
-
-      return () => navigator.geolocation.clearWatch(watchId);
-    }
-  }, [currentDriver]);
-
-  // جلب الطلبات المتاحة (غير مُعيَّنة لسائق) مع تحديث تلقائي
-  const { data: availableOrders = [], isLoading: availableLoading, refetch: refetchAvailable } = useQuery<OrderWithDetails[]>({
+  // جلب الطلبات المتاحة (غير المُعيَّنة لسائق)
+  const { data: availableOrders, isLoading: ordersLoading, refetch: refetchAvailableOrders } = useQuery<Order[]>({
     queryKey: ['/api/orders', { status: 'confirmed', available: true }],
     queryFn: async () => {
-      const response = await fetch('/api/orders?status=confirmed');
-      if (!response.ok) throw new Error('فشل في جلب الطلبات المتاحة');
-      const data = await response.json();
-      
-      // فلترة الطلبات غير المُعيَّنة لسائق وإضافة تفاصيل إضافية
-      const availableOrders = Array.isArray(data) ? data.filter((order: Order) => !order.driverId) : [];
-      
-      // إضافة تفاصيل إضافية لكل طلب
-      const enhancedOrders = await Promise.all(availableOrders.map(async (order: Order) => {
-        const totalAmount = parseFloat(order.totalAmount || '0');
-        const estimatedEarnings = Math.round(totalAmount * 0.15); // 15% عمولة
-        
-        // تحديد أولوية الطلب بناءً على القيمة والوقت
-        let priority: 'high' | 'medium' | 'low' = 'medium';
-        const orderAge = Date.now() - new Date(order.createdAt).getTime();
-        const ageInMinutes = orderAge / (1000 * 60);
-        
-        if (totalAmount > 100 || ageInMinutes > 15) {
-          priority = 'high';
-        } else if (totalAmount < 50 && ageInMinutes < 5) {
-          priority = 'low';
-        }
-
-        return {
-          ...order,
-          restaurantName: 'مطعم تجريبي', // في التطبيق الحقيقي سيتم جلبها من قاعدة البيانات
-          restaurantPhone: '+967771234567',
-          restaurantAddress: 'صنعاء، شارع الزبيري',
-          estimatedEarnings,
-          distance: Math.random() * 10 + 1, // مسافة تجريبية
-          priority
-        } as OrderWithDetails;
-      }));
-
-      // ترتيب حسب الأولوية ثم الوقت
-      return enhancedOrders.sort((a, b) => {
-        const priorityOrder = { high: 3, medium: 2, low: 1 };
-        if (priorityOrder[a.priority!] !== priorityOrder[b.priority!]) {
-          return priorityOrder[b.priority!] - priorityOrder[a.priority!];
-        }
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-      });
-    },
-    enabled: !!currentDriver && driverStatus === 'available',
-    refetchInterval: autoRefresh ? 3000 : false, // تحديث كل 3 ثوانِ
-  });
-
-  // جلب طلبات السائق الحالية مع تحديث سريع
-  const { data: myOrders = [], isLoading: myOrdersLoading, refetch: refetchMyOrders } = useQuery<OrderWithDetails[]>({
-    queryKey: ['/api/orders', { driverId: currentDriver?.id }],
-    queryFn: async () => {
-      if (!currentDriver?.id) return [];
-      const response = await fetch(`/api/orders?driverId=${currentDriver.id}`);
-      if (!response.ok) throw new Error('فشل في جلب طلباتي');
-      const data = await response.json();
-      
-      // إضافة تفاصيل إضافية
-      const enhancedOrders = (Array.isArray(data) ? data : []).map((order: Order) => ({
-        ...order,
-        restaurantName: 'مطعم تجريبي',
-        restaurantPhone: '+967771234567',
-        restaurantAddress: 'صنعاء، شارع الزبيري',
-        estimatedEarnings: Math.round(parseFloat(order.totalAmount || '0') * 0.15),
-        distance: Math.random() * 10 + 1
-      })) as OrderWithDetails[];
-
-      return enhancedOrders;
-    },
-    enabled: !!currentDriver,
-    refetchInterval: autoRefresh ? 2000 : false, // تحديث كل ثانيتين
-  });
-
-  // جلب إحصائيات السائق المحسنة
-  const { data: driverStats } = useQuery<DriverStats>({
-    queryKey: ['/api/drivers', currentDriver?.id, 'stats'],
-    queryFn: async () => {
-      if (!currentDriver?.id) return null;
-      
-      // جلب إحصائيات مختلفة للفترات المختلفة
-      const [todayStats, weekStats, monthStats, totalStats] = await Promise.all([
-        fetch(`/api/drivers/${currentDriver.id}/stats?period=today`).then(res => res.json()),
-        fetch(`/api/drivers/${currentDriver.id}/stats?period=week`).then(res => res.json()),
-        fetch(`/api/drivers/${currentDriver.id}/stats?period=month`).then(res => res.json()),
-        fetch(`/api/drivers/${currentDriver.id}/stats?period=total`).then(res => res.json())
-      ]);
-
-      return {
-        todayOrders: todayStats?.totalOrders || 0,
-        todayEarnings: todayStats?.totalEarnings || 0,
-        weeklyOrders: weekStats?.totalOrders || 0,
-        weeklyEarnings: weekStats?.totalEarnings || 0,
-        monthlyOrders: monthStats?.totalOrders || 0,
-        monthlyEarnings: monthStats?.totalEarnings || 0,
-        totalOrders: totalStats?.totalOrders || 0,
-        totalEarnings: totalStats?.totalEarnings || 0,
-        completedOrders: totalStats?.completedOrders || 0,
-        cancelledOrders: totalStats?.cancelledOrders || 0,
-        averageRating: 4.8,
-        averageDeliveryTime: 28,
-        successRate: totalStats?.totalOrders > 0 ? 
-          Math.round((totalStats?.completedOrders / totalStats?.totalOrders) * 100) : 0
-      };
-    },
-    enabled: !!currentDriver,
-    refetchInterval: 30000, // تحديث كل 30 ثانية
-  });
-
-  // قبول طلب مع تحسينات
-  const acceptOrderMutation = useMutation({
-    mutationFn: async (orderId: string) => {
-      if (!currentDriver?.id) throw new Error('معرف السائق غير موجود');
-      
-      const response = await fetch(`/api/orders/${orderId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          driverId: currentDriver.id,
-          status: 'preparing',
-          updatedBy: currentDriver.id,
-          updatedByType: 'driver',
-          acceptedAt: new Date().toISOString(),
-          driverLocation: currentLocation
-        }),
-      });
-      
+      const response = await fetch('/api/orders?status=confirmed&available=true');
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'فشل في قبول الطلب');
+        throw new Error('فشل في جلب الطلبات المتاحة');
       }
-      
       return response.json();
     },
-    onSuccess: (data, orderId) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
-      setDriverStatus('busy');
-      
-      // إشعار صوتي
-      if (soundEnabled) {
-        playNotificationSound('success');
-      }
-      
-      toast({
-        title: "تم قبول الطلب بنجاح ✅",
-        description: `تم تعيين الطلب ${orderId.slice(0, 8)} لك`,
-      });
-    },
-    onError: (error: Error) => {
-      if (soundEnabled) {
-        playNotificationSound('error');
-      }
-      
-      toast({
-        title: "خطأ في قبول الطلب",
-        description: error.message,
-        variant: "destructive"
-      });
-    }
+    refetchInterval: 5000, // تحديث كل 5 ثوانِ
+    enabled: !!driverId && driverStatus,
   });
 
-  // تحديث حالة الطلب مع تحسينات
-  const updateOrderStatusMutation = useMutation({
-    mutationFn: async ({ orderId, status, location }: { orderId: string; status: string; location?: string }) => {
-      const response = await fetch(`/api/orders/${orderId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          status,
-          updatedBy: currentDriver?.id,
-          updatedByType: 'driver',
-          driverLocation: currentLocation,
-          statusUpdatedAt: new Date().toISOString(),
-          ...(location && { deliveryLocation: location })
-        }),
-      });
-      
+  // جلب طلبات السائق الحالية
+  const { data: myOrders, refetch: refetchMyOrders } = useQuery<Order[]>({
+    queryKey: ['/api/orders', { driverId }],
+    queryFn: async () => {
+      const response = await fetch(`/api/orders?driverId=${driverId}`);
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'فشل في تحديث حالة الطلب');
+        throw new Error('فشل في جلب طلباتي');
       }
-      
       return response.json();
     },
-    onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
-      
-      if (variables.status === 'delivered') {
-        setDriverStatus('available');
-        if (soundEnabled) {
-          playNotificationSound('delivery');
-        }
-      }
-      
-      const statusText = getStatusText(variables.status);
-      toast({
-        title: "تم تحديث حالة الطلب ✅",
-        description: `تم تحديث الطلب إلى: ${statusText}`,
-      });
-    },
-    onError: (error: Error) => {
-      if (soundEnabled) {
-        playNotificationSound('error');
-      }
-      
-      toast({
-        title: "خطأ في تحديث الطلب",
-        description: error.message,
-        variant: "destructive"
-      });
-    }
+    refetchInterval: 3000, // تحديث كل 3 ثوانِ
+    enabled: !!driverId,
   });
 
-  // تحديث حالة السائق مع تحديث الموقع
-  const updateDriverStatusMutation = useMutation({
+  // جلب إحصائيات السائق
+  const { data: todayStats } = useQuery({
+    queryKey: ['/api/drivers', driverId, 'stats', 'today'],
+    queryFn: async () => {
+      const response = await fetch(`/api/drivers/${driverId}/stats?period=today`);
+      if (!response.ok) {
+        throw new Error('فشل في جلب إحصائيات اليوم');
+      }
+      return response.json();
+    },
+    enabled: !!driverId,
+  });
+
+  const { data: weekStats } = useQuery({
+    queryKey: ['/api/drivers', driverId, 'stats', 'week'],
+    queryFn: async () => {
+      const response = await fetch(`/api/drivers/${driverId}/stats?period=week`);
+      if (!response.ok) {
+        throw new Error('فشل في جلب إحصائيات الأسبوع');
+      }
+      return response.json();
+    },
+    enabled: !!driverId,
+  });
+
+  // تحديث حالة السائق
+  const updateStatusMutation = useMutation({
     mutationFn: async (isAvailable: boolean) => {
-      if (!currentDriver?.id) throw new Error('معرف السائق غير موجود');
-      
-      const response = await fetch(`/api/drivers/${currentDriver.id}`, {
+      const response = await fetch(`/api/drivers/${driverId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          isAvailable,
-          currentLocation: currentLocation ? `${currentLocation.lat},${currentLocation.lng}` : null,
-          lastActiveAt: new Date().toISOString()
-        }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ isAvailable }),
       });
       
-      if (!response.ok) throw new Error('فشل في تحديث حالة السائق');
+      if (!response.ok) {
+        throw new Error('فشل في تحديث الحالة');
+      }
+      
       return response.json();
     },
     onSuccess: (data, isAvailable) => {
-      setDriverStatus(isAvailable ? 'available' : 'offline');
+      setDriverStatus(isAvailable);
       
+      // تحديث بيانات السائق في localStorage
       if (currentDriver) {
         const updatedDriver = { ...currentDriver, isAvailable };
         setCurrentDriver(updatedDriver);
@@ -377,11 +142,16 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
       }
       
       toast({
-        title: isAvailable ? "أنت متاح الآن 🟢" : "أنت غير متاح 🔴",
+        title: isAvailable ? "أنت متاح الآن" : "أنت غير متاح",
         description: isAvailable ? "ستتلقى طلبات جديدة" : "لن تتلقى طلبات جديدة",
       });
+      
+      // إعادة جلب الطلبات المتاحة
+      if (isAvailable) {
+        refetchAvailableOrders();
+      }
     },
-    onError: (error: Error) => {
+    onError: (error) => {
       toast({
         title: "خطأ في تحديث الحالة",
         description: error.message,
@@ -390,92 +160,96 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
     }
   });
 
-  // تحديث موقع السائق
-  const updateDriverLocation = async (lat: number, lng: number) => {
-    if (!currentDriver?.id) return;
-    
-    try {
-      await fetch(`/api/drivers/${currentDriver.id}/location`, {
+  // قبول طلب
+  const acceptOrderMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const response = await fetch(`/api/orders/${orderId}/assign-driver`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ latitude: lat, longitude: lng }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ driverId }),
       });
-    } catch (error) {
-      console.error('خطأ في تحديث الموقع:', error);
-    }
-  };
-
-  // مراقبة الطلبات الجديدة للإشعارات المحسنة
-  useEffect(() => {
-    if (availableOrders.length > 0 && driverStatus === 'available') {
-      const latestOrderTime = Math.max(...availableOrders.map(order => 
-        new Date(order.createdAt).getTime()
-      ));
       
-      if (latestOrderTime > lastNotificationTime) {
-        setLastNotificationTime(latestOrderTime);
-        
-        // إشعار صوتي ومرئي محسن
-        if (soundEnabled) {
-          playNotificationSound('newOrder');
-        }
-        
-        // إشعار المتصفح
-        if ('Notification' in window && Notification.permission === 'granted') {
-          const highPriorityOrders = availableOrders.filter(order => order.priority === 'high');
-          const notificationTitle = highPriorityOrders.length > 0 ? 
-            '🔥 طلب عالي الأولوية متاح!' : 
-            '🔔 طلب جديد متاح!';
-          
-          new Notification(notificationTitle, {
-            body: `يوجد ${availableOrders.length} طلب متاح للتوصيل`,
-            icon: '/logo.png',
-            tag: 'new-order',
-            requireInteraction: true
-          });
-        }
-        
-        // اهتزاز الجهاز إذا كان مدعوماً
-        if ('vibrate' in navigator) {
-          navigator.vibrate([200, 100, 200]);
-        }
-        
-        toast({
-          title: "طلب جديد متاح! 🔔",
-          description: `يوجد ${availableOrders.length} طلب جديد متاح للتوصيل`,
-        });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'فشل في قبول الطلب');
       }
+      
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "تم قبول الطلب",
+        description: "يمكنك الآن بدء رحلة التوصيل",
+      });
+      
+      // إعادة جلب البيانات
+      refetchAvailableOrders();
+      refetchMyOrders();
+      queryClient.invalidateQueries({ queryKey: ['/api/drivers', driverId, 'stats'] });
+    },
+    onError: (error) => {
+      toast({
+        title: "خطأ في قبول الطلب",
+        description: error.message,
+        variant: "destructive"
+      });
     }
-  }, [availableOrders, driverStatus, lastNotificationTime, soundEnabled, toast]);
+  });
 
-  // طلب إذن الإشعارات والموقع
-  useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-  }, []);
-
-  // تشغيل الأصوات
-  const playNotificationSound = (type: 'newOrder' | 'success' | 'error' | 'delivery') => {
-    if (!soundEnabled) return;
-    
-    try {
-      const audio = new Audio();
-      switch (type) {
-        case 'newOrder':
-          audio.src = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT';
-          break;
-        case 'success':
-          audio.src = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT';
-          break;
-        default:
-          return;
+  // تحديث حالة الطلب
+  const updateOrderStatusMutation = useMutation({
+    mutationFn: async ({ orderId, status }: { orderId: string; status: string }) => {
+      const response = await fetch(`/api/orders/${orderId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          status,
+          updatedBy: driverId,
+          updatedByType: 'driver'
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'فشل في تحديث حالة الطلب');
       }
-      audio.play().catch(e => console.log('لا يمكن تشغيل الصوت:', e));
-    } catch (error) {
-      console.log('خطأ في تشغيل الصوت:', error);
+      
+      return response.json();
+    },
+    onSuccess: (data, variables) => {
+      const statusMessages: Record<string, string> = {
+        'picked_up': 'تم استلام الطلب من المطعم',
+        'on_way': 'أنت في الطريق للعميل',
+        'delivered': 'تم تسليم الطلب بنجاح'
+      };
+      
+      toast({
+        title: "تم تحديث حالة الطلب",
+        description: statusMessages[variables.status] || 'تم تحديث الحالة',
+      });
+      
+      // إعادة جلب البيانات
+      refetchMyOrders();
+      queryClient.invalidateQueries({ queryKey: ['/api/drivers', driverId, 'stats'] });
+      
+      // إذا تم تسليم الطلب، تحديث حالة السائق إلى متاح
+      if (variables.status === 'delivered') {
+        setDriverStatus(true);
+        updateStatusMutation.mutate(true);
+      }
+    },
+    onError: (error) => {
+      toast({
+        title: "خطأ في تحديث الحالة",
+        description: error.message,
+        variant: "destructive"
+      });
     }
-  };
+  });
 
   const handleLogout = () => {
     localStorage.removeItem('driver_token');
@@ -483,72 +257,18 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
     onLogout();
   };
 
-  const getStatusText = (status: string) => {
-    const statusMap: Record<string, string> = {
-      pending: 'في الانتظار',
-      confirmed: 'مؤكد',
-      preparing: 'قيد التحضير',
-      ready: 'جاهز للاستلام',
-      picked_up: 'تم الاستلام',
-      on_way: 'في الطريق',
-      delivered: 'تم التسليم',
-      cancelled: 'ملغي'
-    };
-    return statusMap[status] || status;
+  const formatCurrency = (amount: string | number) => {
+    const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+    return `${num.toFixed(2)} ريال`;
   };
 
-  const getStatusColor = (status: string) => {
-    const colorMap: Record<string, string> = {
-      pending: 'bg-yellow-100 text-yellow-800',
-      confirmed: 'bg-blue-100 text-blue-800',
-      preparing: 'bg-orange-100 text-orange-800',
-      ready: 'bg-purple-100 text-purple-800',
-      picked_up: 'bg-indigo-100 text-indigo-800',
-      on_way: 'bg-green-100 text-green-800',
-      delivered: 'bg-emerald-100 text-emerald-800',
-      cancelled: 'bg-red-100 text-red-800'
-    };
-    return colorMap[status] || 'bg-gray-100 text-gray-800';
-  };
-
-  const getNextStatus = (currentStatus: string) => {
-    const statusFlow: Record<string, string> = {
-      confirmed: 'preparing',
-      preparing: 'ready',
-      ready: 'picked_up',
-      picked_up: 'on_way',
-      on_way: 'delivered'
-    };
-    return statusFlow[currentStatus];
-  };
-
-  const getNextStatusLabel = (currentStatus: string) => {
-    const labels: Record<string, string> = {
-      confirmed: 'بدء التحضير',
-      preparing: 'جاهز للاستلام',
-      ready: 'تم الاستلام',
-      picked_up: 'في الطريق',
-      on_way: 'تم التسليم'
-    };
-    return labels[currentStatus] || 'تحديث الحالة';
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high': return 'bg-red-100 text-red-800 border-red-200';
-      case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'low': return 'bg-green-100 text-green-800 border-green-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  const getPriorityIcon = (priority: string) => {
-    switch (priority) {
-      case 'high': return '🔥';
-      case 'medium': return '⚡';
-      case 'low': return '🟢';
-      default: return '📦';
-    }
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('ar-SA', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   const getOrderItems = (itemsString: string) => {
@@ -559,253 +279,59 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
     }
   };
 
-  const formatCurrency = (amount: string | number) => {
-    const num = typeof amount === 'string' ? parseFloat(amount) : amount;
-    return `${num.toFixed(2)} ريال`;
-  };
-
-  // فتح خرائط جوجل للمطعم
-  const openRestaurantLocation = (order: OrderWithDetails) => {
-    const restaurantLat = 15.3694; // موقع افتراضي لصنعاء
-    const restaurantLng = 44.1910;
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${restaurantLat},${restaurantLng}`;
-    window.open(url, '_blank');
-  };
-
-  // فتح خرائط جوجل للعميل
-  const openCustomerLocation = (order: OrderWithDetails) => {
-    if (order.customerLocationLat && order.customerLocationLng) {
-      const url = `https://www.google.com/maps/dir/?api=1&destination=${order.customerLocationLat},${order.customerLocationLng}`;
-      window.open(url, '_blank');
-    } else {
-      const encodedAddress = encodeURIComponent(order.deliveryAddress);
-      const url = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
-      window.open(url, '_blank');
-    }
-  };
-
-  // عرض تفاصيل الطلب
-  const handleShowOrderDetails = (order: OrderWithDetails) => {
-    setSelectedOrder(order);
-    setShowOrderDetailsDialog(true);
-  };
-
-  // تصنيف الطلبات حسب الحالة
-  const categorizeOrders = (orders: OrderWithDetails[]) => {
-    return {
-      available: orders.filter(order => 
-        order.status === 'confirmed' && !order.driverId
-      ),
-      accepted: orders.filter(order => 
-        order.driverId === currentDriver?.id && 
-        ['preparing', 'ready'].includes(order.status || '')
-      ),
-      inProgress: orders.filter(order => 
-        order.driverId === currentDriver?.id && 
-        ['picked_up', 'on_way'].includes(order.status || '')
-      ),
-      completed: orders.filter(order => 
-        order.driverId === currentDriver?.id && 
-        order.status === 'delivered'
-      )
+  const getStatusText = (status: string) => {
+    const statusMap: Record<string, string> = {
+      'pending': 'في الانتظار',
+      'confirmed': 'مؤكد',
+      'preparing': 'قيد التحضير',
+      'ready': 'جاهز للاستلام',
+      'picked_up': 'تم الاستلام',
+      'on_way': 'في الطريق',
+      'delivered': 'تم التسليم',
+      'cancelled': 'ملغي'
     };
+    return statusMap[status] || status;
   };
 
-  const allOrders = [...availableOrders, ...myOrders];
-  const categorizedOrders = categorizeOrders(allOrders);
+  const getStatusColor = (status: string) => {
+    const colorMap: Record<string, string> = {
+      'pending': 'bg-yellow-100 text-yellow-800',
+      'confirmed': 'bg-blue-100 text-blue-800',
+      'preparing': 'bg-orange-100 text-orange-800',
+      'ready': 'bg-purple-100 text-purple-800',
+      'picked_up': 'bg-indigo-100 text-indigo-800',
+      'on_way': 'bg-green-100 text-green-800',
+      'delivered': 'bg-emerald-100 text-emerald-800',
+      'cancelled': 'bg-red-100 text-red-800'
+    };
+    return colorMap[status] || 'bg-gray-100 text-gray-800';
+  };
 
-  // مكون عرض الطلب المحسن
-  const EnhancedOrderCard = ({ order, type }: { order: OrderWithDetails; type: 'available' | 'accepted' | 'inProgress' | 'completed' }) => {
-    const items = getOrderItems(order.items);
-    const totalAmount = parseFloat(order.totalAmount || '0');
-    const estimatedEarnings = order.estimatedEarnings || Math.round(totalAmount * 0.15);
+  // الطلبات النشطة للسائق
+  const activeOrders = myOrders?.filter(order => 
+    ['preparing', 'ready', 'picked_up', 'on_way'].includes(order.status || '')
+  ) || [];
 
+  if (!driverId) {
     return (
-      <Card key={order.id} className={`hover:shadow-lg transition-all duration-200 ${
-        order.priority === 'high' ? 'border-red-200 bg-red-50' : 
-        order.priority === 'low' ? 'border-green-200 bg-green-50' : ''
-      }`}>
-        <CardHeader className="pb-3">
-          <div className="flex justify-between items-start">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <h4 className="font-bold text-lg">طلب #{order.id.slice(0, 8)}</h4>
-                {order.priority && (
-                  <Badge className={`text-xs ${getPriorityColor(order.priority)}`}>
-                    {getPriorityIcon(order.priority)} {order.priority === 'high' ? 'عالي' : order.priority === 'medium' ? 'متوسط' : 'منخفض'}
-                  </Badge>
-                )}
-              </div>
-              <p className="text-sm text-muted-foreground">{order.customerName}</p>
-              <p className="text-xs text-muted-foreground">
-                {new Date(order.createdAt).toLocaleString('ar-YE')}
-              </p>
-              {order.distance && (
-                <p className="text-xs text-blue-600">
-                  📍 المسافة: {order.distance.toFixed(1)} كم
-                </p>
-              )}
-            </div>
-            <div className="text-left">
-              <Badge className={getStatusColor(order.status || 'pending')}>
-                {getStatusText(order.status || 'pending')}
-              </Badge>
-              <div className="mt-2">
-                <p className="font-bold text-lg text-green-600">{formatCurrency(totalAmount)}</p>
-                <p className="text-sm text-muted-foreground">عمولة: {formatCurrency(estimatedEarnings)}</p>
-              </div>
-            </div>
-          </div>
-        </CardHeader>
-        
-        <CardContent className="space-y-4">
-          {/* معلومات المطعم */}
-          <div className="bg-blue-50 p-3 rounded-lg">
-            <h5 className="font-medium mb-2 flex items-center gap-2">
-              <Store className="h-4 w-4" />
-              معلومات المطعم
-            </h5>
-            <div className="space-y-1 text-sm">
-              <p><strong>اسم المطعم:</strong> {order.restaurantName}</p>
-              <p><strong>رقم الهاتف:</strong> {order.restaurantPhone}</p>
-              <p><strong>العنوان:</strong> {order.restaurantAddress}</p>
-            </div>
-          </div>
-          
-          {/* معلومات العميل */}
-          <div className="bg-green-50 p-3 rounded-lg">
-            <h5 className="font-medium mb-2 flex items-center gap-2">
-              <User className="h-4 w-4" />
-              معلومات العميل
-            </h5>
-            <div className="space-y-1 text-sm">
-              <p><strong>الاسم:</strong> {order.customerName}</p>
-              <p><strong>الهاتف:</strong> {order.customerPhone}</p>
-              <p><strong>العنوان:</strong> {order.deliveryAddress}</p>
-              {order.notes && (
-                <p><strong>ملاحظات:</strong> {order.notes}</p>
-              )}
-            </div>
-          </div>
-          
-          {/* تفاصيل الطلب */}
-          <div className="bg-gray-50 p-3 rounded-lg">
-            <h5 className="font-medium mb-2">تفاصيل الطلب</h5>
-            <div className="space-y-1">
-              {items.slice(0, 3).map((item: any, index: number) => (
-                <div key={index} className="flex justify-between text-sm">
-                  <span>{item.name} × {item.quantity}</span>
-                  <span>{formatCurrency(item.price * item.quantity)}</span>
-                </div>
-              ))}
-              {items.length > 3 && (
-                <p className="text-xs text-muted-foreground">
-                  و {items.length - 3} عنصر آخر...
-                </p>
-              )}
-              <div className="border-t pt-2 mt-2">
-                <div className="flex justify-between font-medium">
-                  <span>المجموع:</span>
-                  <span className="text-green-600">{formatCurrency(totalAmount)}</span>
-                </div>
-                <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>عمولتك:</span>
-                  <span className="text-green-600">{formatCurrency(estimatedEarnings)}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* أزرار الإجراءات */}
-          <div className="flex gap-2">
-            {type === 'available' && (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={() => handleShowOrderDetails(order)}
-                  className="gap-2"
-                  data-testid={`view-details-${order.id}`}
-                >
-                  <Eye className="h-4 w-4" />
-                  التفاصيل
-                </Button>
-                <Button
-                  onClick={() => acceptOrderMutation.mutate(order.id)}
-                  disabled={acceptOrderMutation.isPending}
-                  className={`flex-1 ${order.priority === 'high' ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'}`}
-                  data-testid={`accept-order-${order.id}`}
-                >
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  {order.priority === 'high' ? 'قبول فوري' : 'قبول الطلب'}
-                </Button>
-              </>
-            )}
-
-            {(type === 'accepted' || type === 'inProgress') && (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={() => openRestaurantLocation(order)}
-                  className="gap-2"
-                  data-testid={`restaurant-location-${order.id}`}
-                >
-                  <Store className="h-4 w-4" />
-                  المطعم
-                </Button>
-                
-                <Button
-                  variant="outline"
-                  onClick={() => window.open(`tel:${order.customerPhone}`)}
-                  className="gap-2"
-                  data-testid={`call-customer-${order.id}`}
-                >
-                  <Phone className="h-4 w-4" />
-                  اتصال
-                </Button>
-                
-                <Button
-                  variant="outline"
-                  onClick={() => openCustomerLocation(order)}
-                  className="gap-2"
-                  data-testid={`navigate-${order.id}`}
-                >
-                  <Navigation className="h-4 w-4" />
-                  التنقل
-                </Button>
-
-                {getNextStatus(order.status || '') && (
-                  <Button
-                    onClick={() => updateOrderStatusMutation.mutate({ 
-                      orderId: order.id, 
-                      status: getNextStatus(order.status || '') 
-                    })}
-                    disabled={updateOrderStatusMutation.isPending}
-                    className="flex-1"
-                    data-testid={`update-status-${order.id}`}
-                  >
-                    {getNextStatusLabel(order.status || '')}
-                  </Button>
-                )}
-              </>
-            )}
-
-            {type === 'completed' && (
-              <div className="flex-1 text-center">
-                <Badge className="bg-green-100 text-green-800">
-                  <CheckCircle className="h-3 w-3 mr-1" />
-                  مكتمل
-                </Badge>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="w-96">
+          <CardContent className="p-8 text-center">
+            <Truck className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+            <h3 className="text-lg font-semibold text-foreground mb-2">غير مصرح</h3>
+            <p className="text-muted-foreground mb-4">يجب تسجيل الدخول كسائق</p>
+            <Button onClick={onLogout}>
+              تسجيل الدخول
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     );
-  };
+  }
 
   return (
     <div className="min-h-screen bg-gray-50" dir="rtl">
-      {/* Header محسن */}
+      {/* Header */}
       <header className="bg-white shadow-sm border-b sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
@@ -814,59 +340,51 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
                 <Truck className="h-6 w-6 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">تطبيق السائق المحسن</h1>
-                <p className="text-sm text-gray-500">مرحباً {currentDriver?.name}</p>
+                <h1 className="text-xl font-bold text-gray-900">تطبيق السائق</h1>
+                <p className="text-sm text-gray-500">{currentDriver?.name || 'السائق'}</p>
               </div>
             </div>
             
             <div className="flex items-center gap-4">
-              {/* مؤشر الطلبات الجديدة */}
-              {categorizedOrders.available.length > 0 && driverStatus === 'available' && (
-                <div className="flex items-center gap-2 bg-red-50 px-3 py-1 rounded-full animate-pulse">
-                  <Bell className="h-4 w-4 text-red-500" />
-                  <span className="text-sm font-medium text-red-700">
-                    {categorizedOrders.available.length} طلب جديد
-                  </span>
-                </div>
-              )}
-
-              {/* إعدادات سريعة */}
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setAutoRefresh(!autoRefresh)}
-                  className={autoRefresh ? 'text-green-600' : 'text-gray-400'}
-                >
-                  <RefreshCw className={`h-4 w-4 ${autoRefresh ? 'animate-spin' : ''}`} />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSoundEnabled(!soundEnabled)}
-                  className={soundEnabled ? 'text-blue-600' : 'text-gray-400'}
-                >
-                  <Bell className="h-4 w-4" />
-                </Button>
+              {/* مؤشر التحديث التلقائي */}
+              <div className="flex items-center gap-2 text-xs text-green-600">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span>تحديث مباشر</span>
               </div>
-
-              {/* حالة السائق */}
+              
+              {/* حالة التوفر */}
               <div className="flex items-center gap-2">
-                <Label htmlFor="driver-status" className="text-sm">متاح للعمل</Label>
+                <Label htmlFor="driver-status" className="text-sm text-gray-700">متاح</Label>
                 <Switch
                   id="driver-status"
-                  checked={driverStatus === 'available'}
-                  onCheckedChange={(checked) => updateDriverStatusMutation.mutate(checked)}
-                  disabled={updateDriverStatusMutation.isPending}
-                  data-testid="driver-status-toggle"
+                  checked={driverStatus}
+                  onCheckedChange={(checked) => updateStatusMutation.mutate(checked)}
+                  disabled={updateStatusMutation.isPending}
+                  data-testid="switch-driver-status"
                 />
               </div>
-
+              
+              {/* زر إعادة التحديث */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  refetchAvailableOrders();
+                  refetchMyOrders();
+                }}
+                disabled={ordersLoading}
+                className="gap-2"
+              >
+                <RefreshCw className={`h-4 w-4 ${ordersLoading ? 'animate-spin' : ''}`} />
+                تحديث
+              </Button>
+              
+              {/* تسجيل الخروج */}
               <Button 
                 variant="outline" 
+                size="sm" 
                 onClick={handleLogout}
-                className="flex items-center gap-2"
-                data-testid="logout-button"
+                className="flex items-center gap-2 text-red-600 hover:text-red-700"
               >
                 <LogOut className="h-4 w-4" />
                 خروج
@@ -876,507 +394,433 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
         </div>
       </header>
 
-      {/* إحصائيات سريعة محسنة */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-            <CardContent className="p-4 text-center">
-              <Package className="h-6 w-6 mx-auto mb-2" />
-              <p className="text-lg font-bold">{driverStats?.todayOrders || 0}</p>
-              <p className="text-xs opacity-90">طلبات اليوم</p>
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        {/* إحصائيات سريعة */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">طلبات اليوم</p>
+                  <p className="text-2xl font-bold text-blue-600" data-testid="today-orders">
+                    {todayStats?.totalOrders || 0}
+                  </p>
+                </div>
+                <Package className="h-8 w-8 text-blue-500" />
+              </div>
             </CardContent>
           </Card>
-          
-          <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white">
-            <CardContent className="p-4 text-center">
-              <DollarSign className="h-6 w-6 mx-auto mb-2" />
-              <p className="text-lg font-bold">{formatCurrency(driverStats?.todayEarnings || 0)}</p>
-              <p className="text-xs opacity-90">أرباح اليوم</p>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">أرباح اليوم</p>
+                  <p className="text-2xl font-bold text-green-600" data-testid="today-earnings">
+                    {formatCurrency(todayStats?.totalEarnings || 0)}
+                  </p>
+                </div>
+                <DollarSign className="h-8 w-8 text-green-500" />
+              </div>
             </CardContent>
           </Card>
-          
-          <Card className="bg-gradient-to-r from-purple-500 to-purple-600 text-white">
-            <CardContent className="p-4 text-center">
-              <Target className="h-6 w-6 mx-auto mb-2" />
-              <p className="text-lg font-bold">{driverStats?.successRate || 0}%</p>
-              <p className="text-xs opacity-90">معدل النجاح</p>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">أرباح الأسبوع</p>
+                  <p className="text-2xl font-bold text-purple-600">
+                    {formatCurrency(weekStats?.totalEarnings || 0)}
+                  </p>
+                </div>
+                <TrendingUp className="h-8 w-8 text-purple-500" />
+              </div>
             </CardContent>
           </Card>
-          
-          <Card className="bg-gradient-to-r from-orange-500 to-orange-600 text-white">
-            <CardContent className="p-4 text-center">
-              <Activity className="h-6 w-6 mx-auto mb-2" />
-              <p className="text-lg font-bold">
-                {driverStatus === 'available' ? '🟢 متاح' : 
-                 driverStatus === 'busy' ? '🟡 مشغول' : '🔴 غير متاح'}
-              </p>
-              <p className="text-xs opacity-90">الحالة الحالية</p>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">الحالة</p>
+                  <p className="text-lg font-bold text-orange-600">
+                    {driverStatus ? 'متاح' : 'غير متاح'}
+                  </p>
+                </div>
+                <Activity className="h-8 w-8 text-orange-500" />
+              </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* تحذيرات وتنبيهات */}
-        {driverStatus === 'offline' && (
-          <Alert className="mb-6 border-yellow-200 bg-yellow-50">
-            <AlertCircle className="h-4 w-4 text-yellow-600" />
-            <AlertDescription className="text-yellow-800">
-              أنت غير متاح حالياً. قم بتفعيل حالة "متاح للعمل" لاستقبال الطلبات الجديدة.
-            </AlertDescription>
-          </Alert>
+        {/* الطلبات النشطة */}
+        {activeOrders.length > 0 && (
+          <Card className="border-green-200 bg-green-50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-green-800">
+                <Package className="h-5 w-5" />
+                الطلبات الحالية ({activeOrders.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {activeOrders.map((order) => {
+                const items = getOrderItems(order.items);
+                const canPickUp = order.status === 'ready';
+                const canMarkOnWay = order.status === 'picked_up';
+                const canDeliver = order.status === 'on_way';
+                
+                return (
+                  <div key={order.id} className="bg-white border border-green-200 rounded-lg p-4">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <h4 className="font-bold text-gray-900">
+                          طلب #{order.orderNumber || order.id.slice(0, 8)}
+                        </h4>
+                        <p className="text-sm text-gray-600">{order.customerName}</p>
+                        <Badge className={getStatusColor(order.status || 'pending')}>
+                          {getStatusText(order.status || 'pending')}
+                        </Badge>
+                      </div>
+                      <div className="text-left">
+                        <p className="font-bold text-green-600">
+                          {formatCurrency(order.totalAmount || '0')}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          عمولة: {formatCurrency(order.driverEarnings || '0')}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2 mb-4">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-gray-500" />
+                        <span className="text-sm text-gray-700">{order.deliveryAddress}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-gray-500" />
+                        <span className="text-sm text-gray-700">{order.customerPhone}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Package className="h-4 w-4 text-gray-500" />
+                        <span className="text-sm text-gray-700">
+                          {items.length} عنصر - {order.paymentMethod === 'cash' ? 'دفع نقدي' : 'مدفوع مسبقاً'}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      {canPickUp && (
+                        <Button
+                          onClick={() => updateOrderStatusMutation.mutate({ orderId: order.id, status: 'picked_up' })}
+                          disabled={updateOrderStatusMutation.isPending}
+                          className="flex-1 bg-yellow-600 hover:bg-yellow-700"
+                          data-testid={`button-pickup-${order.id}`}
+                        >
+                          تم الاستلام من المطعم
+                        </Button>
+                      )}
+                      
+                      {canMarkOnWay && (
+                        <Button
+                          onClick={() => updateOrderStatusMutation.mutate({ orderId: order.id, status: 'on_way' })}
+                          disabled={updateOrderStatusMutation.isPending}
+                          className="flex-1 bg-orange-600 hover:bg-orange-700"
+                          data-testid={`button-on-way-${order.id}`}
+                        >
+                          في الطريق للعميل
+                        </Button>
+                      )}
+                      
+                      {canDeliver && (
+                        <Button
+                          onClick={() => updateOrderStatusMutation.mutate({ orderId: order.id, status: 'delivered' })}
+                          disabled={updateOrderStatusMutation.isPending}
+                          className="flex-1 bg-green-600 hover:bg-green-700"
+                          data-testid={`button-deliver-${order.id}`}
+                        >
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          تم التسليم
+                        </Button>
+                      )}
+                      
+                      <Button
+                        variant="outline"
+                        onClick={() => window.open(`tel:${order.customerPhone}`)}
+                        className="gap-2"
+                        data-testid={`button-call-${order.id}`}
+                      >
+                        <Phone className="h-4 w-4" />
+                        اتصال
+                      </Button>
+                      
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          const address = encodeURIComponent(order.deliveryAddress);
+                          const url = order.customerLocationLat && order.customerLocationLng 
+                            ? `https://www.google.com/maps?q=${order.customerLocationLat},${order.customerLocationLng}`
+                            : `https://www.google.com/maps/search/?api=1&query=${address}`;
+                          window.open(url, '_blank');
+                        }}
+                        className="gap-2"
+                        data-testid={`button-navigate-${order.id}`}
+                      >
+                        <Navigation className="h-4 w-4" />
+                        التنقل
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
         )}
 
-        {/* التبويبات المحسنة */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="dashboard" className="relative">
-              الرئيسية
-            </TabsTrigger>
-            <TabsTrigger value="available" className="relative">
-              الطلبات المتاحة
-              {categorizedOrders.available.length > 0 && (
-                <Badge className="absolute -top-2 -right-2 bg-red-500 text-white text-xs h-5 w-5 rounded-full p-0 flex items-center justify-center">
-                  {categorizedOrders.available.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="accepted" className="relative">
-              طلباتي المقبولة
-              {categorizedOrders.accepted.length > 0 && (
-                <Badge className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs h-5 w-5 rounded-full p-0 flex items-center justify-center">
-                  {categorizedOrders.accepted.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="inProgress" className="relative">
-              قيد التوصيل
-              {categorizedOrders.inProgress.length > 0 && (
-                <Badge className="absolute -top-2 -right-2 bg-orange-500 text-white text-xs h-5 w-5 rounded-full p-0 flex items-center justify-center">
-                  {categorizedOrders.inProgress.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="stats">
-              الإحصائيات
-            </TabsTrigger>
-          </TabsList>
-
-          {/* لوحة المعلومات الرئيسية */}
-          <TabsContent value="dashboard" className="space-y-6">
-            {/* الطلب الحالي */}
-            {categorizedOrders.inProgress.length > 0 && (
-              <Card className="border-orange-200 bg-orange-50">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-orange-800">
-                    <Zap className="h-5 w-5" />
-                    الطلب النشط - #{categorizedOrders.inProgress[0].id.slice(0, 8)}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <DriverCommunication 
-                    driver={{
-                      id: currentDriver?.id || '',
-                      name: currentDriver?.name || '',
-                      phone: currentDriver?.phone || '',
-                      isAvailable: currentDriver?.isAvailable || false
-                    }}
-                    orderNumber={categorizedOrders.inProgress[0].id.slice(0, 8)}
-                    customerLocation={categorizedOrders.inProgress[0].deliveryAddress}
-                  />
-                </CardContent>
-              </Card>
-            )}
-
-            {/* ملخص سريع للطلبات */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">طلبات متاحة</p>
-                      <p className="text-2xl font-bold text-blue-600">{categorizedOrders.available.length}</p>
-                    </div>
-                    <Bell className="h-8 w-8 text-blue-500" />
-                  </div>
-                </CardContent>
-              </Card>
+        {/* الطلبات المتاحة */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Bell className="h-5 w-5 text-primary" />
+                الطلبات المتاحة
+                {availableOrders && availableOrders.length > 0 && (
+                  <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                    {availableOrders.length}
+                  </Badge>
+                )}
+              </div>
               
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">قيد التوصيل</p>
-                      <p className="text-2xl font-bold text-orange-600">{categorizedOrders.inProgress.length}</p>
-                    </div>
-                    <Route className="h-8 w-8 text-orange-500" />
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">مكتملة اليوم</p>
-                      <p className="text-2xl font-bold text-green-600">{driverStats?.todayOrders || 0}</p>
-                    </div>
-                    <CheckCircle className="h-8 w-8 text-green-500" />
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          {/* الطلبات المتاحة */}
-          <TabsContent value="available" className="space-y-4">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-bold">الطلبات المتاحة ({categorizedOrders.available.length})</h2>
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => refetchAvailable()}
-                  disabled={availableLoading}
-                  data-testid="refresh-available-orders"
+                  onClick={() => refetchAvailableOrders()}
+                  disabled={ordersLoading}
+                  className="gap-2"
                 >
-                  <RefreshCw className={`h-4 w-4 ${availableLoading ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`h-4 w-4 ${ordersLoading ? 'animate-spin' : ''}`} />
                   تحديث
                 </Button>
-                <Badge variant="secondary">
-                  تحديث تلقائي: {autoRefresh ? 'مفعل' : 'معطل'}
-                </Badge>
               </div>
-            </div>
-
-            {driverStatus !== 'available' && (
-              <Alert className="border-yellow-200 bg-yellow-50">
-                <AlertCircle className="h-4 w-4 text-yellow-600" />
-                <AlertDescription className="text-yellow-800">
-                  يجب تفعيل حالة "متاح للعمل" لرؤية الطلبات الجديدة
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {availableLoading ? (
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!driverStatus ? (
+              <div className="text-center py-8">
+                <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-600 mb-2">غير متاح للعمل</h3>
+                <p className="text-gray-500 mb-4">قم بتفعيل حالة التوفر لاستقبال الطلبات</p>
+                <Button 
+                  onClick={() => updateStatusMutation.mutate(true)}
+                  disabled={updateStatusMutation.isPending}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  تفعيل حالة التوفر
+                </Button>
+              </div>
+            ) : ordersLoading ? (
               <div className="space-y-4">
                 {[...Array(3)].map((_, i) => (
-                  <Card key={i} className="animate-pulse">
-                    <CardContent className="p-6">
-                      <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
-                      <div className="h-3 bg-gray-200 rounded w-1/2 mb-3" />
-                      <div className="h-3 bg-gray-200 rounded w-2/3" />
-                    </CardContent>
-                  </Card>
+                  <div key={i} className="border rounded-lg p-4 animate-pulse">
+                    <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
+                    <div className="h-3 bg-gray-200 rounded w-1/2 mb-3" />
+                    <div className="h-3 bg-gray-200 rounded w-2/3" />
+                  </div>
                 ))}
               </div>
-            ) : categorizedOrders.available.length === 0 ? (
-              <Card>
-                <CardContent className="p-8 text-center">
-                  <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">لا توجد طلبات متاحة</h3>
-                  <p className="text-muted-foreground">سيتم إشعارك عند توفر طلبات جديدة</p>
-                  <div className="mt-4 flex items-center justify-center gap-2">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    <span className="text-sm text-green-600">في انتظار الطلبات...</span>
-                  </div>
-                </CardContent>
-              </Card>
+            ) : !availableOrders || availableOrders.length === 0 ? (
+              <div className="text-center py-8">
+                <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-600 mb-2">لا توجد طلبات متاحة</h3>
+                <p className="text-gray-500">سيتم إشعارك عند توفر طلبات جديدة</p>
+              </div>
             ) : (
               <div className="space-y-4">
-                {categorizedOrders.available.map(order => (
-                  <EnhancedOrderCard key={order.id} order={order} type="available" />
-                ))}
-              </div>
-            )}
-          </TabsContent>
-
-          {/* الطلبات المقبولة */}
-          <TabsContent value="accepted" className="space-y-4">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-bold">طلباتي المقبولة ({categorizedOrders.accepted.length})</h2>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => refetchMyOrders()}
-                disabled={myOrdersLoading}
-              >
-                <RefreshCw className={`h-4 w-4 ${myOrdersLoading ? 'animate-spin' : ''}`} />
-                تحديث
-              </Button>
-            </div>
-
-            {categorizedOrders.accepted.length === 0 ? (
-              <Card>
-                <CardContent className="p-8 text-center">
-                  <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">لا توجد طلبات مقبولة</h3>
-                  <p className="text-muted-foreground">الطلبات التي تقبلها ستظهر هنا</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-4">
-                {categorizedOrders.accepted.map(order => (
-                  <EnhancedOrderCard key={order.id} order={order} type="accepted" />
-                ))}
-              </div>
-            )}
-          </TabsContent>
-
-          {/* الطلبات قيد التوصيل */}
-          <TabsContent value="inProgress" className="space-y-4">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-bold">قيد التوصيل ({categorizedOrders.inProgress.length})</h2>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => refetchMyOrders()}
-                disabled={myOrdersLoading}
-              >
-                <RefreshCw className={`h-4 w-4 ${myOrdersLoading ? 'animate-spin' : ''}`} />
-                تحديث
-              </Button>
-            </div>
-
-            {categorizedOrders.inProgress.length === 0 ? (
-              <Card>
-                <CardContent className="p-8 text-center">
-                  <Navigation className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">لا توجد طلبات قيد التوصيل</h3>
-                  <p className="text-muted-foreground">الطلبات التي تقوم بتوصيلها ستظهر هنا</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-4">
-                {categorizedOrders.inProgress.map(order => (
-                  <EnhancedOrderCard key={order.id} order={order} type="inProgress" />
-                ))}
-              </div>
-            )}
-          </TabsContent>
-
-          {/* الإحصائيات المحسنة */}
-          <TabsContent value="stats" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {/* إحصائيات اليوم */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Calendar className="h-5 w-5" />
-                    إحصائيات اليوم
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex justify-between">
-                    <span>الطلبات:</span>
-                    <span className="font-bold">{driverStats?.todayOrders || 0}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>الأرباح:</span>
-                    <span className="font-bold text-green-600">{formatCurrency(driverStats?.todayEarnings || 0)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>متوسط الطلب:</span>
-                    <span className="font-bold">
-                      {driverStats?.todayOrders ? 
-                        formatCurrency((driverStats.todayEarnings || 0) / driverStats.todayOrders) : 
-                        formatCurrency(0)
-                      }
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* إحصائيات الأسبوع */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5" />
-                    إحصائيات الأسبوع
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex justify-between">
-                    <span>الطلبات:</span>
-                    <span className="font-bold">{driverStats?.weeklyOrders || 0}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>الأرباح:</span>
-                    <span className="font-bold text-green-600">{formatCurrency(driverStats?.weeklyEarnings || 0)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>معدل النجاح:</span>
-                    <span className="font-bold">{driverStats?.successRate || 0}%</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* إحصائيات الأداء */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Star className="h-5 w-5" />
-                    إحصائيات الأداء
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex justify-between">
-                    <span>التقييم:</span>
-                    <span className="font-bold text-yellow-600">{driverStats?.averageRating || 0} ⭐</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>متوسط التوصيل:</span>
-                    <span className="font-bold">{driverStats?.averageDeliveryTime || 0} دقيقة</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>إجمالي الطلبات:</span>
-                    <span className="font-bold">{driverStats?.totalOrders || 0}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* رسم بياني للأرباح */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Wallet className="h-5 w-5" />
-                  تطور الأرباح
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span>اليوم</span>
-                    <div className="flex items-center gap-2">
-                      <Progress value={(driverStats?.todayEarnings || 0) / 500 * 100} className="w-32" />
-                      <span className="font-bold">{formatCurrency(driverStats?.todayEarnings || 0)}</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span>هذا الأسبوع</span>
-                    <div className="flex items-center gap-2">
-                      <Progress value={(driverStats?.weeklyEarnings || 0) / 2000 * 100} className="w-32" />
-                      <span className="font-bold">{formatCurrency(driverStats?.weeklyEarnings || 0)}</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span>هذا الشهر</span>
-                    <div className="flex items-center gap-2">
-                      <Progress value={(driverStats?.monthlyEarnings || 0) / 8000 * 100} className="w-32" />
-                      <span className="font-bold">{formatCurrency(driverStats?.monthlyEarnings || 0)}</span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
-      
-      {/* نافذة تفاصيل الطلب المحسنة */}
-      <Dialog open={showOrderDetailsDialog} onOpenChange={setShowOrderDetailsDialog}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto" dir="rtl">
-          <DialogHeader>
-            <DialogTitle>تفاصيل الطلب #{selectedOrder?.id?.slice(0, 8)}</DialogTitle>
-          </DialogHeader>
-          
-          {selectedOrder && (
-            <div className="space-y-4">
-              {/* معلومات المطعم */}
-              <Card>
-                <CardContent className="p-4">
-                  <h4 className="font-medium mb-2 flex items-center gap-2">
-                    <Store className="h-4 w-4" />
-                    معلومات المطعم
-                  </h4>
-                  <div className="space-y-2 text-sm">
-                    <p><strong>اسم المطعم:</strong> {selectedOrder.restaurantName}</p>
-                    <p><strong>رقم الهاتف:</strong> {selectedOrder.restaurantPhone}</p>
-                    <p><strong>العنوان:</strong> {selectedOrder.restaurantAddress}</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openRestaurantLocation(selectedOrder)}
-                      className="w-full mt-2"
-                    >
-                      <Map className="h-4 w-4 mr-2" />
-                      عرض موقع المطعم على الخريطة
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              {/* معلومات العميل */}
-              <Card>
-                <CardContent className="p-4">
-                  <h4 className="font-medium mb-2 flex items-center gap-2">
-                    <User className="h-4 w-4" />
-                    معلومات العميل
-                  </h4>
-                  <div className="space-y-2 text-sm">
-                    <p><strong>الاسم:</strong> {selectedOrder.customerName}</p>
-                    <p><strong>الهاتف:</strong> {selectedOrder.customerPhone}</p>
-                    <p><strong>العنوان:</strong> {selectedOrder.deliveryAddress}</p>
-                    {selectedOrder.notes && (
-                      <p><strong>ملاحظات:</strong> {selectedOrder.notes}</p>
-                    )}
-                    <div className="flex gap-2 mt-3">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => window.open(`tel:${selectedOrder.customerPhone}`)}
-                        className="flex-1"
-                      >
-                        <Phone className="h-4 w-4 mr-2" />
-                        اتصال
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openCustomerLocation(selectedOrder)}
-                        className="flex-1"
-                      >
-                        <Navigation className="h-4 w-4 mr-2" />
-                        التوجيه
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              {/* تفاصيل الطلب */}
-              <Card>
-                <CardContent className="p-4">
-                  <h4 className="font-medium mb-2">تفاصيل الطلب</h4>
-                  <div className="space-y-2">
-                    {getOrderItems(selectedOrder.items).map((item: any, index: number) => (
-                      <div key={index} className="flex justify-between text-sm">
-                        <span>{item.name} × {item.quantity}</span>
-                        <span>{formatCurrency(item.price * item.quantity)}</span>
+                {availableOrders.map((order) => {
+                  const items = getOrderItems(order.items);
+                  const totalAmount = parseFloat(order.totalAmount || '0');
+                  const estimatedEarnings = parseFloat(order.driverEarnings || '0');
+                  
+                  return (
+                    <div key={order.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <h4 className="font-bold text-gray-900">
+                            طلب #{order.orderNumber || order.id.slice(0, 8)}
+                          </h4>
+                          <p className="text-sm text-gray-600">{order.customerName}</p>
+                          <p className="text-xs text-gray-500">
+                            {formatDate(order.createdAt.toString())}
+                          </p>
+                        </div>
+                        <div className="text-left">
+                          <p className="font-bold text-primary">{formatCurrency(totalAmount)}</p>
+                          <p className="text-sm text-green-600">
+                            عمولتك: {formatCurrency(estimatedEarnings)}
+                          </p>
+                          <Badge className="mt-1 bg-blue-100 text-blue-800">
+                            {getStatusText(order.status || 'pending')}
+                          </Badge>
+                        </div>
                       </div>
-                    ))}
-                    <div className="border-t pt-2 mt-2">
-                      <div className="flex justify-between font-medium">
-                        <span>المجموع:</span>
-                        <span className="text-green-600">{formatCurrency(selectedOrder.totalAmount)}</span>
+                      
+                      <div className="space-y-2 mb-4">
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4 text-gray-500" />
+                          <span className="text-sm text-gray-700">{order.deliveryAddress}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Package className="h-4 w-4 text-gray-500" />
+                          <span className="text-sm text-gray-700">
+                            {items.length} عنصر - {order.paymentMethod === 'cash' ? 'دفع نقدي' : 'مدفوع مسبقاً'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-gray-500" />
+                          <span className="text-sm text-gray-700">
+                            الوقت المتوقع: {order.estimatedTime || '30-45 دقيقة'}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex justify-between text-sm text-muted-foreground">
-                        <span>عمولتك:</span>
-                        <span className="text-green-600">{formatCurrency(selectedOrder.estimatedEarnings || 0)}</span>
+                      
+                      <div className="flex gap-2">
+                        <Button 
+                          className="flex-1 bg-green-600 hover:bg-green-700"
+                          onClick={() => acceptOrderMutation.mutate(order.id)}
+                          disabled={acceptOrderMutation.isPending || activeOrders.length > 0}
+                          data-testid={`button-accept-${order.id}`}
+                        >
+                          {acceptOrderMutation.isPending ? (
+                            <>
+                              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                              جاري القبول...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle className="h-4 w-4 mr-2" />
+                              قبول الطلب
+                            </>
+                          )}
+                        </Button>
+                        
+                        <Button 
+                          variant="outline"
+                          onClick={() => {
+                            const address = encodeURIComponent(order.deliveryAddress);
+                            const url = order.customerLocationLat && order.customerLocationLng 
+                              ? `https://www.google.com/maps?q=${order.customerLocationLat},${order.customerLocationLng}`
+                              : `https://www.google.com/maps/search/?api=1&query=${address}`;
+                            window.open(url, '_blank');
+                          }}
+                          data-testid={`button-view-location-${order.id}`}
+                        >
+                          عرض الموقع
+                        </Button>
                       </div>
-                      {selectedOrder.distance && (
-                        <div className="flex justify-between text-sm text-muted-foreground">
-                          <span>المسافة:</span>
-                          <span>{selectedOrder.distance.toFixed(1)} كم</span>
+                      
+                      {activeOrders.length > 0 && (
+                        <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
+                          ⚠️ لديك طلب نشط. أكمل التوصيل الحالي قبل قبول طلب جديد
                         </div>
                       )}
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ملخص الأرباح */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5" />
+                إحصائيات اليوم
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex justify-between">
+                <span>إجمالي الطلبات:</span>
+                <span className="font-bold">{todayStats?.totalOrders || 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>الطلبات المكتملة:</span>
+                <span className="font-bold text-green-600">{todayStats?.completedOrders || 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>إجمالي الأرباح:</span>
+                <span className="font-bold text-green-600">{formatCurrency(todayStats?.totalEarnings || 0)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>متوسط الطلب:</span>
+                <span className="font-bold">{formatCurrency(todayStats?.avgOrderValue || 0)}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Target className="h-5 w-5" />
+                إحصائيات الأسبوع
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex justify-between">
+                <span>إجمالي الطلبات:</span>
+                <span className="font-bold">{weekStats?.totalOrders || 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>الطلبات المكتملة:</span>
+                <span className="font-bold text-green-600">{weekStats?.completedOrders || 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>إجمالي الأرباح:</span>
+                <span className="font-bold text-green-600">{formatCurrency(weekStats?.totalEarnings || 0)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>متوسط الطلب:</span>
+                <span className="font-bold">{formatCurrency(weekStats?.avgOrderValue || 0)}</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* معلومات إضافية */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              معلومات السائق
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm text-gray-600">الاسم:</p>
+              <p className="font-medium">{currentDriver?.name || 'غير محدد'}</p>
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
+            <div>
+              <p className="text-sm text-gray-600">رقم الهاتف:</p>
+              <p className="font-medium">{currentDriver?.phone || 'غير محدد'}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">الموقع الحالي:</p>
+              <p className="font-medium">{currentDriver?.currentLocation || 'غير محدد'}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">إجمالي الأرباح:</p>
+              <p className="font-medium text-green-600">
+                {formatCurrency(currentDriver?.earnings || '0')}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };
+
+export default DriverDashboard;
