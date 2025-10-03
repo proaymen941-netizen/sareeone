@@ -1,11 +1,17 @@
 import { useState, useEffect } from 'react';
-import { MapPin, Phone, Clock, CheckCircle, Bell, Package, DollarSign, User, BarChart3, Navigation, LogOut } from 'lucide-react';
+import { MapPin, Phone, Clock, CheckCircle, Bell, Package, DollarSign, User, BarChart3, Navigation, LogOut, Map } from 'lucide-react';
+import DriverMapView from '@/components/maps/DriverMapView';
 
 interface Order {
   id: string;
+  orderNumber?: string;
   customerName: string;
   customerPhone: string;
   deliveryAddress: string;
+  customerLocationLat?: string;
+  customerLocationLng?: string;
+  restaurantLat?: string;
+  restaurantLng?: string;
   notes?: string;
   totalAmount: string;
   estimatedTime: string;
@@ -40,7 +46,7 @@ export default function DriverApp() {
   const [myOrders, setMyOrders] = useState<Order[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [driver, setDriver] = useState<Driver | null>(null);
-  const [activeTab, setActiveTab] = useState<'available' | 'myorders' | 'profile' | 'stats'>('available');
+  const [activeTab, setActiveTab] = useState<'available' | 'myorders' | 'map' | 'profile' | 'stats'>('available');
   const [isLoading, setIsLoading] = useState(false);
   const [driverId, setDriverId] = useState<string>('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -323,6 +329,17 @@ export default function DriverApp() {
           طلباتي ({myOrders.length})
         </button>
         <button
+          onClick={() => setActiveTab('map')}
+          className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
+            activeTab === 'map'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}
+        >
+          <Map size={18} />
+          الخريطة
+        </button>
+        <button
           onClick={() => setActiveTab('stats')}
           className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
             activeTab === 'stats'
@@ -412,6 +429,35 @@ export default function DriverApp() {
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {/* Map Tab */}
+      {activeTab === 'map' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <Map size={24} className="text-blue-600" />
+              خريطة الطلبات والمواقع
+            </h2>
+            <p className="text-gray-600 mb-4">
+              عرض جميع طلباتك على الخريطة مع تحديد المسارات والمسافات
+            </p>
+            <DriverMapView
+              orders={myOrders}
+              height="600px"
+              onNavigate={(order) => {
+                const lat = order.customerLocationLat || order.restaurantLat;
+                const lng = order.customerLocationLng || order.restaurantLng;
+                if (lat && lng) {
+                  window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
+                }
+              }}
+              onCall={(phone) => {
+                window.location.href = `tel:${phone}`;
+              }}
+            />
+          </div>
         </div>
       )}
 

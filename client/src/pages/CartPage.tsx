@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
 import { useMutation } from '@tanstack/react-query';
-import { ArrowRight, Trash2 } from 'lucide-react';
+import { ArrowRight, Trash2, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,7 @@ import { useCart } from '../contexts/CartContext';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import type { InsertOrder } from '@shared/schema';
+import LocationPicker from '@/components/maps/LocationPicker';
 
 export default function CartPage() {
   const [, setLocation] = useLocation();
@@ -24,9 +25,12 @@ export default function CartPage() {
     customerPhone: '',
     customerEmail: '',
     deliveryAddress: '',
+    customerLocationLat: '',
+    customerLocationLng: '',
     notes: '',
     paymentMethod: 'cash',
   });
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
 
   const placeOrderMutation = useMutation({
     mutationFn: async (orderData: InsertOrder) => {
@@ -80,12 +84,15 @@ export default function CartPage() {
       customerPhone: orderForm.customerPhone,
       customerEmail: orderForm.customerEmail || undefined,
       deliveryAddress: orderForm.deliveryAddress,
+      customerLocationLat: orderForm.customerLocationLat || undefined,
+      customerLocationLng: orderForm.customerLocationLng || undefined,
       notes: orderForm.notes || undefined,
       paymentMethod: orderForm.paymentMethod,
       items: JSON.stringify(items),
       subtotal: subtotal.toString(),
       deliveryFee: "5",
       total: total.toString(),
+      totalAmount: total.toString(),
       restaurantId: items[0]?.restaurantId || undefined,
       status: 'pending',
     };
@@ -242,13 +249,31 @@ export default function CartPage() {
 
               <div>
                 <Label htmlFor="deliveryAddress" className="text-foreground">عنوان التوصيل *</Label>
-                <Input
-                  id="deliveryAddress"
-                  value={orderForm.deliveryAddress}
-                  onChange={(e) => setOrderForm(prev => ({ ...prev, deliveryAddress: e.target.value }))}
-                  placeholder="أدخل عنوانك بالتفصيل"
-                  data-testid="input-delivery-address"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="deliveryAddress"
+                    value={orderForm.deliveryAddress}
+                    onChange={(e) => setOrderForm(prev => ({ ...prev, deliveryAddress: e.target.value }))}
+                    placeholder="أدخل عنوانك بالتفصيل"
+                    data-testid="input-delivery-address"
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowLocationPicker(true)}
+                    className="flex items-center gap-2 whitespace-nowrap"
+                    data-testid="button-pick-location"
+                  >
+                    <MapPin className="h-4 w-4" />
+                    حدد على الخريطة
+                  </Button>
+                </div>
+                {orderForm.customerLocationLat && orderForm.customerLocationLng && (
+                  <p className="text-xs text-green-600 mt-1">
+                    ✓ تم تحديد الموقع على الخريطة
+                  </p>
+                )}
               </div>
 
               <div>
@@ -306,6 +331,31 @@ export default function CartPage() {
           </Card>
         )}
       </section>
+
+      {/* Location Picker Modal */}
+      {showLocationPicker && (
+        <LocationPicker
+          onLocationSelect={(lat, lng, address) => {
+            setOrderForm(prev => ({
+              ...prev,
+              deliveryAddress: address,
+              customerLocationLat: lat.toString(),
+              customerLocationLng: lng.toString(),
+            }));
+            setShowLocationPicker(false);
+            toast({
+              title: "تم تحديد الموقع",
+              description: "تم تحديد عنوان التوصيل على الخريطة",
+            });
+          }}
+          onCancel={() => setShowLocationPicker(false)}
+          initialLocation={
+            orderForm.customerLocationLat && orderForm.customerLocationLng
+              ? [parseFloat(orderForm.customerLocationLat), parseFloat(orderForm.customerLocationLng)]
+              : undefined
+          }
+        />
+      )}
     </div>
   );
 }
