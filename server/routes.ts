@@ -200,109 +200,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/orders/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const { status, updatedBy, updatedByType, driverLocation } = req.body;
-
-      if (!status) {
-        return res.status(400).json({ error: "الحالة مطلوبة" });
-      }
-
-      // التحقق من وجود الطلب
-      const order = await storage.getOrder(id);
+      const validatedData = insertOrderSchema.partial().parse(req.body);
+      const order = await storage.updateOrder(id, validatedData);
       if (!order) {
-        return res.status(404).json({ error: "الطلب غير موجود" });
+        return res.status(404).json({ message: "Order not found" });
       }
-
-      // إعداد بيانات التحديث
-      const updateData: any = {
-        status,
-        updatedAt: new Date()
-      };
-      
-      const updatedOrder = await storage.updateOrder(id, updateData);
-
-      // إنشاء رسالة الحالة
-      let statusMessage = '';
-      let notificationTitle = 'تحديث حالة الطلب';
-      
-      switch (status) {
-        case 'confirmed':
-          statusMessage = 'تم تأكيد الطلب من المطعم';
-          notificationTitle = 'تم تأكيد طلبك';
-          break;
-        case 'preparing':
-          statusMessage = 'جاري تحضير الطلب';
-          notificationTitle = 'جاري تحضير طلبك';
-          break;
-        case 'ready':
-          statusMessage = 'الطلب جاهز للاستلام';
-          notificationTitle = 'طلبك جاهز';
-          break;
-        case 'picked_up':
-          statusMessage = 'تم استلام الطلب من المطعم';
-          notificationTitle = 'تم استلام طلبك';
-          break;
-        case 'on_way':
-          statusMessage = 'السائق في الطريق إليك';
-          notificationTitle = 'السائق في الطريق إليك';
-          break;
-        case 'delivered':
-          statusMessage = 'تم تسليم الطلب بنجاح';
-          notificationTitle = 'تم تسليم طلبك';
-          // تحرير السائق
-          if (order.driverId) {
-            await storage.updateDriver(order.driverId, { isAvailable: true });
-          }
-          break;
-        case 'cancelled':
-          statusMessage = 'تم إلغاء الطلب';
-          notificationTitle = 'تم إلغاء طلبك';
-          // تحرير السائق إذا كان مُعيَّناً
-          if (order.driverId) {
-            await storage.updateDriver(order.driverId, { isAvailable: true });
-          }
-          break;
-        default:
-          statusMessage = `تم تحديث حالة الطلب إلى ${status}`;
-      }
-
-      // إنشاء إشعارات
-      try {
-        // إشعار للعميل
-        await storage.createNotification({
-          type: 'order_status_update',
-          title: notificationTitle,
-          message: `طلبك رقم ${order.orderNumber || order.id.slice(0, 8)}: ${statusMessage}`,
-          recipientType: 'customer',
-          recipientId: order.customerPhone,
-          orderId: id,
-          isRead: false
-        });
-
-        // إشعار للسائق إذا كان مُعيَّناً
-        if (order.driverId && status !== 'delivered') {
-          await storage.createNotification({
-            type: 'order_status_update',
-            title: 'تحديث حالة الطلب',
-            message: `تم تحديث حالة الطلب ${order.orderNumber || order.id.slice(0, 8)} إلى: ${statusMessage}`,
-            recipientType: 'driver',
-            recipientId: order.driverId,
-            orderId: id,
-            isRead: false
-          });
-        }
-      } catch (notificationError) {
-        console.error('خطأ في إنشاء الإشعارات:', notificationError);
-      }
-
-      res.json({ 
-        success: true, 
-        order: updatedOrder,
-        statusMessage,
-        timestamp: new Date().toISOString()
-      });
+      res.json(order);
     } catch (error) {
-      console.error("خطأ في تحديث حالة الطلب:", error);
-      res.status(500).json({ error: "خطأ في الخادم" });
+      res.status(400).json({ message: "Invalid order data" });
     }
   });
 

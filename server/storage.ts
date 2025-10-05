@@ -719,10 +719,6 @@ async updateRestaurant(id: string, restaurant: Partial<InsertRestaurant>): Promi
     if (!existing) return undefined;
     const updated = { ...existing, ...driver };
     this.drivers.set(id, updated);
-    
-    // إضافة log للتتبع
-    console.log(`🚗 تم تحديث السائق: ${updated.name} - متاح: ${updated.isAvailable}`);
-    
     return updated;
   }
 
