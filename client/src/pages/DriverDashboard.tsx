@@ -66,20 +66,33 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
     }
   }, []);
 
-  // جلب الطلبات المتاحة (غير مُعيَّنة لسائق)
-  const { data: availableOrders = [], isLoading: availableLoading, refetch: refetchAvailable } = useQuery<Order[]>({
-    queryKey: ['/api/orders', { status: 'confirmed', available: true }],
-    queryFn: async () => {
-      const response = await fetch('/api/orders?status=confirmed');
+// جلب الطلبات المتاحة (غير مُعيَّنة لسائق)
+const { data: availableOrders = [], isLoading: availableLoading, refetch: refetchAvailable } = useQuery<Order[]>({
+  queryKey: ['/api/orders', { available: true }],
+  queryFn: async () => {
+    try {
+      const response = await fetch('/api/orders?available=true');
       if (!response.ok) throw new Error('فشل في جلب الطلبات المتاحة');
       const data = await response.json();
-      // فلترة الطلبات غير المُعيَّنة لسائق
-      const availableOrders = Array.isArray(data) ? data.filter((order: Order) => !order.driverId) : [];
-      return availableOrders;
-    },
-    enabled: !!currentDriver && driverStatus === 'available',
-    refetchInterval: 5000, // تحديث كل 5 ثوانِ
-  });
+      
+      // فلترة مزدوجة للتأكد
+      const filteredOrders = Array.isArray(data) ? 
+        data.filter((order: Order) => {
+          const isConfirmed = order.status === 'confirmed';
+          const hasNoDriver = !order.driverId || order.driverId === null || order.driverId === '';
+          return isConfirmed && hasNoDriver;
+        }) : [];
+      
+      console.log('✅ الطلبات المتاحة:', filteredOrders);
+      return filteredOrders;
+    } catch (error) {
+      console.error('❌ خطأ في جلب الطلبات:', error);
+      return [];
+    }
+  },
+  enabled: !!currentDriver && driverStatus === 'available',
+  refetchInterval: 5000,
+});
 
   // جلب طلبات السائق الحالية
   const { data: myOrders = [], isLoading: myOrdersLoading, refetch: refetchMyOrders } = useQuery<Order[]>({
