@@ -66,46 +66,71 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
     }
   }, []);
 
-// جلب الطلبات المتاحة (غير مُعيَّنة لسائق)
-const { data: availableOrders = [], isLoading: availableLoading, refetch: refetchAvailable } = useQuery<Order[]>({
-  queryKey: ['/api/orders', { available: true }],
-  queryFn: async () => {
-    try {
-      const response = await fetch('/api/orders?available=true');
-      if (!response.ok) throw new Error('فشل في جلب الطلبات المتاحة');
-      const data = await response.json();
-      
-      // فلترة مزدوجة للتأكد
-      const filteredOrders = Array.isArray(data) ? 
-        data.filter((order: Order) => {
-          const isConfirmed = order.status === 'confirmed';
-          const hasNoDriver = !order.driverId || order.driverId === null || order.driverId === '';
-          return isConfirmed && hasNoDriver;
-        }) : [];
-      
-      console.log('✅ الطلبات المتاحة:', filteredOrders);
-      return filteredOrders;
-    } catch (error) {
-      console.error('❌ خطأ في جلب الطلبات:', error);
-      return [];
-    }
-  },
-  enabled: !!currentDriver && driverStatus === 'available',
-  refetchInterval: 5000,
-});
+  // جلب الطلبات المتاحة (غير مُعيَّنة لسائق) - الكود المعدل
+  const { data: availableOrders = [], isLoading: availableLoading, refetch: refetchAvailable } = useQuery<Order[]>({
+    queryKey: ['/api/orders', { available: true }],
+    queryFn: async () => {
+      try {
+        const response = await fetch('/api/orders?available=true&status=confirmed');
+        if (!response.ok) {
+          throw new Error(`فشل في جلب الطلبات المتاحة: ${response.status}`);
+        }
+        const data = await response.json();
+        
+        // فلترة مزدوجة للتأكد من صحة البيانات
+        const availableOrders = Array.isArray(data) ? 
+          data.filter((order: Order) => {
+            const isConfirmed = order.status === 'confirmed';
+            const hasNoDriver = !order.driverId || order.driverId === null || order.driverId === '';
+            return isConfirmed && hasNoDriver;
+          }) : [];
+        
+        console.log('✅ الطلبات المتاحة بعد الفلترة:', availableOrders.length);
+        return availableOrders;
+      } catch (error) {
+        console.error('❌ خطأ في جلب الطلبات المتاحة:', error);
+        toast({
+          title: "خطأ في جلب البيانات",
+          description: "تعذر تحميل الطلبات المتاحة",
+          variant: "destructive"
+        });
+        return [];
+      }
+    },
+    enabled: !!currentDriver && driverStatus === 'available',
+    refetchInterval: 5000,
+  });
 
-  // جلب طلبات السائق الحالية
+  // جلب طلبات السائق الحالية - الكود المعدل
   const { data: myOrders = [], isLoading: myOrdersLoading, refetch: refetchMyOrders } = useQuery<Order[]>({
     queryKey: ['/api/orders', { driverId: currentDriver?.id }],
     queryFn: async () => {
       if (!currentDriver?.id) return [];
-      const response = await fetch(`/api/orders?driverId=${currentDriver.id}`);
-      if (!response.ok) throw new Error('فشل في جلب طلباتي');
-      const data = await response.json();
-      return Array.isArray(data) ? data : [];
+      
+      try {
+        const response = await fetch(`/api/orders?driverId=${currentDriver.id}`);
+        if (!response.ok) {
+          throw new Error(`فشل في جلب طلباتي: ${response.status}`);
+        }
+        const data = await response.json();
+        
+        const driverOrders = Array.isArray(data) ? 
+          data.filter((order: Order) => order.driverId === currentDriver.id) : [];
+        
+        console.log('✅ طلبات السائق الحالية:', driverOrders.length);
+        return driverOrders;
+      } catch (error) {
+        console.error('❌ خطأ في جلب طلبات السائق:', error);
+        toast({
+          title: "خطأ في جلب البيانات",
+          description: "تعذر تحميل طلباتك",
+          variant: "destructive"
+        });
+        return [];
+      }
     },
     enabled: !!currentDriver,
-    refetchInterval: 3000, // تحديث كل 3 ثوانِ
+    refetchInterval: 3000,
   });
 
   // جلب إحصائيات السائق
@@ -113,9 +138,15 @@ const { data: availableOrders = [], isLoading: availableLoading, refetch: refetc
     queryKey: ['/api/drivers', currentDriver?.id, 'stats'],
     queryFn: async () => {
       if (!currentDriver?.id) return null;
-      const response = await fetch(`/api/drivers/${currentDriver.id}/stats`);
-      if (!response.ok) return { totalOrders: 0, totalEarnings: 0, completedOrders: 0 };
-      return response.json();
+      
+      try {
+        const response = await fetch(`/api/drivers/${currentDriver.id}/stats`);
+        if (!response.ok) return { totalOrders: 0, totalEarnings: 0, completedOrders: 0 };
+        return response.json();
+      } catch (error) {
+        console.error('❌ خطأ في جلب إحصائيات السائق:', error);
+        return { totalOrders: 0, totalEarnings: 0, completedOrders: 0 };
+      }
     },
     enabled: !!currentDriver,
     refetchInterval: 30000,
@@ -126,31 +157,32 @@ const { data: availableOrders = [], isLoading: availableLoading, refetch: refetc
     mutationFn: async (orderId: string) => {
       if (!currentDriver?.id) throw new Error('معرف السائق غير موجود');
       
-      const response = await fetch(`/api/orders/${orderId}`, {
+      const response = await fetch(`/api/orders/${orderId}/assign-driver`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('driver_token')}`
+        },
         body: JSON.stringify({ 
-          driverId: currentDriver.id,
-          status: 'preparing',
-          updatedBy: currentDriver.id,
-          updatedByType: 'driver'
+          driverId: currentDriver.id
         }),
       });
       
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || 'فشل في قبول الطلب');
+        throw new Error(error.error || error.message || 'فشل في قبول الطلب');
       }
       
       return response.json();
     },
     onSuccess: (data, orderId) => {
       queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/drivers', currentDriver?.id, 'stats'] });
       setDriverStatus('busy');
       
       toast({
         title: "تم قبول الطلب بنجاح ✅",
-        description: `تم تعيين الطلب ${orderId.slice(0, 8)} لك`,
+        description: `تم تعيين الطلب لك بنجاح`,
       });
     },
     onError: (error: Error) => {
@@ -167,7 +199,10 @@ const { data: availableOrders = [], isLoading: availableLoading, refetch: refetc
     mutationFn: async ({ orderId, status }: { orderId: string; status: string }) => {
       const response = await fetch(`/api/orders/${orderId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('driver_token')}`
+        },
         body: JSON.stringify({ 
           status,
           updatedBy: currentDriver?.id,
@@ -177,13 +212,14 @@ const { data: availableOrders = [], isLoading: availableLoading, refetch: refetc
       
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || 'فشل في تحديث حالة الطلب');
+        throw new Error(error.error || error.message || 'فشل في تحديث حالة الطلب');
       }
       
       return response.json();
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/drivers', currentDriver?.id, 'stats'] });
       
       if (variables.status === 'delivered') {
         setDriverStatus('available');
@@ -211,21 +247,32 @@ const { data: availableOrders = [], isLoading: availableLoading, refetch: refetc
       
       const response = await fetch(`/api/drivers/${currentDriver.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('driver_token')}`
+        },
         body: JSON.stringify({ isAvailable }),
       });
       
-      if (!response.ok) throw new Error('فشل في تحديث حالة السائق');
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || error.message || 'فشل في تحديث حالة السائق');
+      }
+      
       return response.json();
     },
     onSuccess: (data, isAvailable) => {
-      setDriverStatus(isAvailable ? 'available' : 'offline');
+      const newStatus = isAvailable ? 'available' : 'offline';
+      setDriverStatus(newStatus);
       
       if (currentDriver) {
         const updatedDriver = { ...currentDriver, isAvailable };
         setCurrentDriver(updatedDriver);
         localStorage.setItem('driver_user', JSON.stringify(updatedDriver));
       }
+      
+      // إعادة تحميل البيانات عند تغيير الحالة
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
       
       toast({
         title: isAvailable ? "أنت متاح الآن 🟢" : "أنت غير متاح 🔴",
@@ -260,10 +307,18 @@ const { data: availableOrders = [], isLoading: availableLoading, refetch: refetc
           });
         }
         
-        toast({
-          title: "طلب جديد متاح! 🔔",
-          description: `يوجد ${availableOrders.length} طلب جديد متاح للتوصيل`,
-        });
+        // إشعار التطبيق
+        if (availableOrders.length === 1) {
+          toast({
+            title: "طلب جديد متاح! 🔔",
+            description: "يوجد طلب جديد متاح للتوصيل",
+          });
+        } else {
+          toast({
+            title: "طلبات جديدة متاحة! 🔔",
+            description: `يوجد ${availableOrders.length} طلبات جديدة متاحة للتوصيل`,
+          });
+        }
       }
     }
   }, [availableOrders, driverStatus, lastNotificationTime, toast]);
@@ -333,7 +388,10 @@ const { data: availableOrders = [], isLoading: availableLoading, refetch: refetc
 
   const getOrderItems = (itemsString: string) => {
     try {
-      return JSON.parse(itemsString);
+      if (typeof itemsString === 'string') {
+        return JSON.parse(itemsString);
+      }
+      return itemsString || [];
     } catch {
       return [];
     }
@@ -346,8 +404,6 @@ const { data: availableOrders = [], isLoading: availableLoading, refetch: refetc
 
   // فتح خرائط جوجل للمطعم
   const openRestaurantLocation = (order: Order) => {
-    // في التطبيق الحقيقي، سنجلب موقع المطعم من قاعدة البيانات
-    // للآن نستخدم موقع افتراضي لصنعاء
     const restaurantLat = 15.3694;
     const restaurantLng = 44.1910;
     const url = `https://www.google.com/maps/dir/?api=1&destination=${restaurantLat},${restaurantLng}`;
@@ -360,7 +416,6 @@ const { data: availableOrders = [], isLoading: availableLoading, refetch: refetc
       const url = `https://www.google.com/maps/dir/?api=1&destination=${order.customerLocationLat},${order.customerLocationLng}`;
       window.open(url, '_blank');
     } else {
-      // استخدام العنوان النصي
       const encodedAddress = encodeURIComponent(order.deliveryAddress);
       const url = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
       window.open(url, '_blank');
@@ -373,46 +428,31 @@ const { data: availableOrders = [], isLoading: availableLoading, refetch: refetc
     setShowOrderDetailsDialog(true);
   };
 
-  // فتح خرائط جوجل للتنقل
-  const openGoogleMaps = (address: string) => {
-    const encodedAddress = encodeURIComponent(address);
-    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
-    
-    // محاولة فتح التطبيق أولاً، ثم المتصفح
-    const mobileAppUrl = `comgooglemaps://?q=${encodedAddress}`;
-    
-    // للأجهزة المحمولة، محاولة فتح التطبيق
-    if (/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
-      window.location.href = mobileAppUrl;
-      // إذا فشل فتح التطبيق، فتح المتصفح بعد ثانية
-      setTimeout(() => {
-        window.open(googleMapsUrl, '_blank');
-      }, 1000);
-    } else {
-      // للحاسوب، فتح في المتصفح
-      window.open(googleMapsUrl, '_blank');
-    }
-  };
-
-  // تصنيف الطلبات حسب الحالة
+  // تصنيف الطلبات حسب الحالة - الكود المعدل
   const categorizeOrders = (orders: Order[]) => {
-    return {
-      available: orders.filter(order => 
-        order.status === 'confirmed' && !order.driverId
-      ),
-      accepted: orders.filter(order => 
-        order.driverId === currentDriver?.id && 
-        ['preparing', 'ready'].includes(order.status || '')
-      ),
-      inProgress: orders.filter(order => 
-        order.driverId === currentDriver?.id && 
-        ['picked_up', 'on_way'].includes(order.status || '')
-      ),
-      completed: orders.filter(order => 
-        order.driverId === currentDriver?.id && 
-        order.status === 'delivered'
-      )
-    };
+    const available = orders.filter(order => 
+      order.status === 'confirmed' && 
+      (!order.driverId || order.driverId === null || order.driverId === '')
+    );
+    
+    const accepted = orders.filter(order => 
+      order.driverId === currentDriver?.id && 
+      ['preparing', 'ready'].includes(order.status || '')
+    );
+    
+    const inProgress = orders.filter(order => 
+      order.driverId === currentDriver?.id && 
+      ['picked_up', 'on_way'].includes(order.status || '')
+    );
+    
+    const completed = orders.filter(order => 
+      order.driverId === currentDriver?.id && 
+      order.status === 'delivered'
+    );
+
+    console.log('📊 تصنيف الطلبات:', { available, accepted, inProgress, completed });
+    
+    return { available, accepted, inProgress, completed };
   };
 
   const allOrders = [...availableOrders, ...myOrders];
@@ -422,14 +462,14 @@ const { data: availableOrders = [], isLoading: availableLoading, refetch: refetc
   const OrderCard = ({ order, type }: { order: Order; type: 'available' | 'accepted' | 'inProgress' | 'completed' }) => {
     const items = getOrderItems(order.items);
     const totalAmount = parseFloat(order.totalAmount || '0');
-    const commission = Math.round(totalAmount * 0.15); // 15% عمولة
+    const commission = Math.round(totalAmount * 0.15);
 
     return (
       <Card key={order.id} className="hover:shadow-md transition-shadow">
         <CardHeader className="pb-3">
           <div className="flex justify-between items-start">
             <div>
-              <h4 className="font-bold text-lg">طلب #{order.id.slice(0, 8)}</h4>
+              <h4 className="font-bold text-lg">طلب #{order.orderNumber || order.id.slice(0, 8)}</h4>
               <p className="text-sm text-muted-foreground">{order.customerName}</p>
               <p className="text-xs text-muted-foreground">
                 {new Date(order.createdAt).toLocaleString('ar-YE')}
@@ -496,7 +536,6 @@ const { data: availableOrders = [], isLoading: availableLoading, refetch: refetc
                   variant="outline"
                   onClick={() => handleShowOrderDetails(order)}
                   className="gap-2"
-                  data-testid={`view-details-${order.id}`}
                 >
                   <Eye className="h-4 w-4" />
                   التفاصيل
@@ -505,7 +544,6 @@ const { data: availableOrders = [], isLoading: availableLoading, refetch: refetc
                   onClick={() => acceptOrderMutation.mutate(order.id)}
                   disabled={acceptOrderMutation.isPending}
                   className="flex-1 bg-green-600 hover:bg-green-700"
-                  data-testid={`accept-order-${order.id}`}
                 >
                   <CheckCircle className="h-4 w-4 mr-2" />
                   قبول الطلب
@@ -519,7 +557,6 @@ const { data: availableOrders = [], isLoading: availableLoading, refetch: refetc
                   variant="outline"
                   onClick={() => openRestaurantLocation(order)}
                   className="gap-2"
-                  data-testid={`restaurant-location-${order.id}`}
                 >
                   <Store className="h-4 w-4" />
                   المطعم
@@ -529,7 +566,6 @@ const { data: availableOrders = [], isLoading: availableLoading, refetch: refetc
                   variant="outline"
                   onClick={() => window.open(`tel:${order.customerPhone}`)}
                   className="gap-2"
-                  data-testid={`call-customer-${order.id}`}
                 >
                   <Phone className="h-4 w-4" />
                   اتصال
@@ -539,7 +575,6 @@ const { data: availableOrders = [], isLoading: availableLoading, refetch: refetc
                   variant="outline"
                   onClick={() => openCustomerLocation(order)}
                   className="gap-2"
-                  data-testid={`navigate-${order.id}`}
                 >
                   <Navigation className="h-4 w-4" />
                   التنقل
@@ -553,7 +588,6 @@ const { data: availableOrders = [], isLoading: availableLoading, refetch: refetc
                     })}
                     disabled={updateOrderStatusMutation.isPending}
                     className="flex-1"
-                    data-testid={`update-status-${order.id}`}
                   >
                     {getNextStatusLabel(order.status || '')}
                   </Button>
@@ -610,7 +644,6 @@ const { data: availableOrders = [], isLoading: availableLoading, refetch: refetc
                   checked={driverStatus === 'available'}
                   onCheckedChange={(checked) => updateDriverStatusMutation.mutate(checked)}
                   disabled={updateDriverStatusMutation.isPending}
-                  data-testid="driver-status-toggle"
                 />
               </div>
 
@@ -618,7 +651,6 @@ const { data: availableOrders = [], isLoading: availableLoading, refetch: refetc
                 variant="outline" 
                 onClick={handleLogout}
                 className="flex items-center gap-2"
-                data-testid="logout-button"
               >
                 <LogOut className="h-4 w-4" />
                 خروج
