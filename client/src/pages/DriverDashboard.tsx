@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,6 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { apiRequest } from '@/lib/queryClient'; // إضافة apiRequest
 import { 
   Truck, 
   MapPin, 
@@ -67,10 +66,33 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
     }
   }, []);
 
-  // جلب جميع الطلبات بنفس طريقة AdminOrders
-  const { data: allOrders = [], isLoading: ordersLoading } = useQuery<Order[]>({
-    queryKey: ['/api/orders'],
-    refetchInterval: 5000, // تحديث كل 5 ثوانٍ
+  // جلب الطلبات المتاحة (غير مُعيَّنة لسائق)
+  const { data: availableOrders = [], isLoading: availableLoading, refetch: refetchAvailable } = useQuery<Order[]>({
+    queryKey: ['/api/orders', { status: 'confirmed', available: true }],
+    queryFn: async () => {
+      const response = await fetch('/api/orders?status=confirmed');
+      if (!response.ok) throw new Error('فشل في جلب الطلبات المتاحة');
+      const data = await response.json();
+      // فلترة الطلبات غير المُعيَّنة لسائق
+      const availableOrders = Array.isArray(data) ? data.filter((order: Order) => !order.driverId) : [];
+      return availableOrders;
+    },
+    enabled: !!currentDriver && driverStatus === 'available',
+    refetchInterval: 5000, // تحديث كل 5 ثوانِ
+  });
+
+  // جلب طلبات السائق الحالية
+  const { data: myOrders = [], isLoading: myOrdersLoading, refetch: refetchMyOrders } = useQuery<Order[]>({
+    queryKey: ['/api/orders', { driverId: currentDriver?.id }],
+    queryFn: async () => {
+      if (!currentDriver?.id) return [];
+      const response = await fetch(`/api/orders?driverId=${currentDriver.id}`);
+      if (!response.ok) throw new Error('فشل في جلب طلباتي');
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: !!currentDriver,
+    refetchInterval: 3000, // تحديث كل 3 ثوانِ
   });
 
   // جلب إحصائيات السائق
@@ -78,24 +100,34 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
     queryKey: ['/api/drivers', currentDriver?.id, 'stats'],
     queryFn: async () => {
       if (!currentDriver?.id) return null;
-      const response = await apiRequest('GET', `/api/drivers/${currentDriver.id}/stats`);
+      const response = await fetch(`/api/drivers/${currentDriver.id}/stats`);
+      if (!response.ok) return { totalOrders: 0, totalEarnings: 0, completedOrders: 0 };
       return response.json();
     },
     enabled: !!currentDriver,
     refetchInterval: 30000,
   });
 
-  // قبول طلب - مُحدَّث باستخدام apiRequest
+  // قبول طلب
   const acceptOrderMutation = useMutation({
     mutationFn: async (orderId: string) => {
       if (!currentDriver?.id) throw new Error('معرف السائق غير موجود');
       
-      const response = await apiRequest('PUT', `/api/orders/${orderId}`, { 
-        driverId: currentDriver.id,
-        status: 'preparing',
-        updatedBy: currentDriver.id,
-        updatedByType: 'driver'
+      const response = await fetch(`/api/orders/${orderId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          driverId: currentDriver.id,
+          status: 'preparing',
+          updatedBy: currentDriver.id,
+          updatedByType: 'driver'
+        }),
       });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'فشل في قبول الطلب');
+      }
       
       return response.json();
     },
@@ -117,14 +149,23 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
     }
   });
 
-  // تحديث حالة الطلب - مُحدَّث باستخدام apiRequest
+  // تحديث حالة الطلب
   const updateOrderStatusMutation = useMutation({
     mutationFn: async ({ orderId, status }: { orderId: string; status: string }) => {
-      const response = await apiRequest('PUT', `/api/orders/${orderId}`, { 
-        status,
-        updatedBy: currentDriver?.id,
-        updatedByType: 'driver'
+      const response = await fetch(`/api/orders/${orderId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          status,
+          updatedBy: currentDriver?.id,
+          updatedByType: 'driver'
+        }),
       });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'فشل في تحديث حالة الطلب');
+      }
       
       return response.json();
     },
@@ -150,12 +191,18 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
     }
   });
 
-  // تحديث حالة السائق - مُحدَّث باستخدام apiRequest
+  // تحديث حالة السائق
   const updateDriverStatusMutation = useMutation({
     mutationFn: async (isAvailable: boolean) => {
       if (!currentDriver?.id) throw new Error('معرف السائق غير موجود');
       
-      const response = await apiRequest('PUT', `/api/drivers/${currentDriver.id}`, { isAvailable });
+      const response = await fetch(`/api/drivers/${currentDriver.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isAvailable }),
+      });
+      
+      if (!response.ok) throw new Error('فشل في تحديث حالة السائق');
       return response.json();
     },
     onSuccess: (data, isAvailable) => {
@@ -183,8 +230,6 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
 
   // مراقبة الطلبات الجديدة للإشعارات
   useEffect(() => {
-    const availableOrders = categorizeOrders(allOrders).available;
-    
     if (availableOrders.length > 0 && driverStatus === 'available') {
       const latestOrderTime = Math.max(...availableOrders.map(order => 
         new Date(order.createdAt).getTime()
@@ -208,7 +253,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
         });
       }
     }
-  }, [allOrders, driverStatus, lastNotificationTime, toast]);
+  }, [availableOrders, driverStatus, lastNotificationTime, toast]);
 
   // طلب إذن الإشعارات
   useEffect(() => {
@@ -288,6 +333,8 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
 
   // فتح خرائط جوجل للمطعم
   const openRestaurantLocation = (order: Order) => {
+    // في التطبيق الحقيقي، سنجلب موقع المطعم من قاعدة البيانات
+    // للآن نستخدم موقع افتراضي لصنعاء
     const restaurantLat = 15.3694;
     const restaurantLng = 44.1910;
     const url = `https://www.google.com/maps/dir/?api=1&destination=${restaurantLat},${restaurantLng}`;
@@ -300,6 +347,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
       const url = `https://www.google.com/maps/dir/?api=1&destination=${order.customerLocationLat},${order.customerLocationLng}`;
       window.open(url, '_blank');
     } else {
+      // استخدام العنوان النصي
       const encodedAddress = encodeURIComponent(order.deliveryAddress);
       const url = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
       window.open(url, '_blank');
@@ -310,6 +358,27 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
   const handleShowOrderDetails = (order: Order) => {
     setSelectedOrder(order);
     setShowOrderDetailsDialog(true);
+  };
+
+  // فتح خرائط جوجل للتنقل
+  const openGoogleMaps = (address: string) => {
+    const encodedAddress = encodeURIComponent(address);
+    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+    
+    // محاولة فتح التطبيق أولاً، ثم المتصفح
+    const mobileAppUrl = `comgooglemaps://?q=${encodedAddress}`;
+    
+    // للأجهزة المحمولة، محاولة فتح التطبيق
+    if (/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+      window.location.href = mobileAppUrl;
+      // إذا فشل فتح التطبيق، فتح المتصفح بعد ثانية
+      setTimeout(() => {
+        window.open(googleMapsUrl, '_blank');
+      }, 1000);
+    } else {
+      // للحاسوب، فتح في المتصفح
+      window.open(googleMapsUrl, '_blank');
+    }
   };
 
   // تصنيف الطلبات حسب الحالة
@@ -333,12 +402,8 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
     };
   };
 
+  const allOrders = [...availableOrders, ...myOrders];
   const categorizedOrders = categorizeOrders(allOrders);
-
-  // دالة التحديث اليدوي
-  const refetchOrders = () => {
-    queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
-  };
 
   // مكون عرض الطلب
   const OrderCard = ({ order, type }: { order: Order; type: 'available' | 'accepted' | 'inProgress' | 'completed' }) => {
@@ -628,11 +693,11 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={refetchOrders}
-                disabled={ordersLoading}
+                onClick={() => refetchAvailable()}
+                disabled={availableLoading}
                 data-testid="refresh-available-orders"
               >
-                <RefreshCw className={`h-4 w-4 ${ordersLoading ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-4 w-4 ${availableLoading ? 'animate-spin' : ''}`} />
                 تحديث
               </Button>
             </div>
@@ -650,7 +715,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
               </Card>
             )}
 
-            {ordersLoading ? (
+            {availableLoading ? (
               <div className="space-y-4">
                 {[...Array(3)].map((_, i) => (
                   <Card key={i} className="animate-pulse">
@@ -686,10 +751,10 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={refetchOrders}
-                disabled={ordersLoading}
+                onClick={() => refetchMyOrders()}
+                disabled={myOrdersLoading}
               >
-                <RefreshCw className={`h-4 w-4 ${ordersLoading ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-4 w-4 ${myOrdersLoading ? 'animate-spin' : ''}`} />
                 تحديث
               </Button>
             </div>
@@ -718,10 +783,10 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={refetchOrders}
-                disabled={ordersLoading}
+                onClick={() => refetchMyOrders()}
+                disabled={myOrdersLoading}
               >
-                <RefreshCw className={`h-4 w-4 ${ordersLoading ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-4 w-4 ${myOrdersLoading ? 'animate-spin' : ''}`} />
                 تحديث
               </Button>
             </div>
