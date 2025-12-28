@@ -217,12 +217,19 @@ router.put("/:id/assign-driver", async (req, res) => {
     // تحديث الطلب
     const updatedOrder = await storage.updateOrder(id, {
       driverId,
-      status: 'preparing',
+      status: 'preparing', // تم التعديل حسب الخوارزمية
       updatedAt: new Date()
     });
 
     // تحديث حالة السائق إلى مشغول
     await storage.updateDriver(driverId, { isAvailable: false });
+
+    // إرسال تحديث لحظي عبر WebSocket
+    const wss = req.app.get("wss");
+    if (wss) {
+      wss.broadcast("order_update", { orderId: id, status: 'preparing', driverId });
+      wss.sendToUser(driverId, "new_order_assigned", { order: updatedOrder });
+    }
 
     // إنشاء إشعارات
     try {

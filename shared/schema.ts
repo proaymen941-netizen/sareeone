@@ -95,6 +95,8 @@ export const drivers = pgTable("drivers", {
   isAvailable: boolean("is_available").default(true).notNull(),
   isActive: boolean("is_active").default(true).notNull(),
   currentLocation: varchar("current_location", { length: 200 }),
+  latitude: decimal("latitude", { precision: 10, scale: 8 }), // تمت الإضافة
+  longitude: decimal("longitude", { precision: 11, scale: 8 }), // تمت الإضافة
   earnings: decimal("earnings", { precision: 10, scale: 2 }).default("0"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
