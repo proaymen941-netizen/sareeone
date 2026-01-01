@@ -56,16 +56,24 @@ export default function ImageUpload({
     setIsUploading(true);
 
     try {
-      const result = await uploadImage(file, bucket);
-      onChange(result.url);
+      // تحويل الصورة إلى Base64 للحفظ في قاعدة البيانات مباشرة إذا فشل Supabase
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
+
+      const base64 = await base64Promise;
+      onChange(base64);
+      
       toast({
-        title: "تم رفع الصورة بنجاح",
-        description: "تم حفظ الصورة في التخزين السحابي",
+        title: "تم تجهيز الصورة",
+        description: "تم تحويل الصورة وسيتم حفظها مع البيانات",
       });
     } catch (error) {
-      console.error('خطأ في رفع الصورة:', error);
+      console.error('خطأ في معالجة الصورة:', error);
       toast({
-        title: "فشل في رفع الصورة",
+        title: "فشل في معالجة الصورة",
         description: error instanceof Error ? error.message : "حدث خطأ غير متوقع",
         variant: "destructive",
       });
