@@ -1,53 +1,60 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useLocation } from 'wouter';
-import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, MapPin, Clock, Phone, Truck, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 
+interface OrderStatus {
+  id: string;
+  status: 'pending' | 'confirmed' | 'preparing' | 'on_way' | 'delivered' | 'cancelled';
+  timestamp: Date;
+  description: string;
+}
+
+interface OrderDetails {
+  id: string;
+  customerName: string;
+  customerPhone: string;
+  deliveryAddress: string;
+  items: any[];
+  total: number;
+  status: string;
+  estimatedTime: string;
+  driverName?: string;
+  driverPhone?: string;
+  createdAt: Date;
+}
+
 export default function OrderTracking() {
   const { orderId } = useParams<{ orderId: string }>();
   const [, setLocation] = useLocation();
-  const [driverLocation, setDriverLocation] = useState<{lat: number, lng: number} | null>(null);
-
-  const { data: order, isLoading } = useQuery<any>({
-    queryKey: ['/api/orders', orderId],
-    queryFn: async () => {
-      const res = await fetch(`/api/orders/${orderId}`);
-      if (!res.ok) throw new Error('Failed to fetch order');
-      return res.json();
-    },
-    refetchInterval: 10000, // Fallback polling
+  
+  // Mock order data - in real app this would come from API
+  const [order] = useState<OrderDetails>({
+    id: orderId || '12345',
+    customerName: 'محمد أحمد',
+    customerPhone: '+967771234567',
+    deliveryAddress: 'صنعاء، شارع الزبيري، بجانب مسجد النور',
+    items: [
+      { name: 'عربكة بالقشطة والعسل', quantity: 2, price: 55 },
+      { name: 'مياه معدنية', quantity: 1, price: 3 },
+    ],
+    total: 113,
+    status: 'on_way',
+    estimatedTime: '25 دقيقة',
+    driverName: 'أحمد محمد',
+    driverPhone: '+967771234567',
+    createdAt: new Date(),
   });
 
-  const { data: orderHistory = [] } = useQuery<any[]>({
-    queryKey: ['/api/orders', orderId, 'track'],
-    queryFn: async () => {
-      const res = await fetch(`/api/orders/${orderId}/track`);
-      if (!res.ok) return [];
-      return res.json();
-    },
-  });
-
-  useEffect(() => {
-    if (!orderId) return;
-
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
-
-    socket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'driver_location' && order?.driverId === data.payload.driverId) {
-        setDriverLocation({ lat: data.payload.latitude, lng: data.payload.longitude });
-      }
-    };
-
-    return () => socket.close();
-  }, [orderId, order?.driverId]);
-
-  if (isLoading || !order) return <div className="p-8 text-center text-muted-foreground">جاري تحميل بيانات الطلب...</div>;
+  const [orderHistory] = useState<OrderStatus[]>([
+    { id: '1', status: 'pending', timestamp: new Date(Date.now() - 30 * 60000), description: 'تم استلام الطلب' },
+    { id: '2', status: 'confirmed', timestamp: new Date(Date.now() - 25 * 60000), description: 'تم تأكيد الطلب من المطعم' },
+    { id: '3', status: 'preparing', timestamp: new Date(Date.now() - 15 * 60000), description: 'جاري تحضير الطلب' },
+    { id: '4', status: 'on_way', timestamp: new Date(Date.now() - 5 * 60000), description: 'الطلب في الطريق إليك' },
+  ]);
 
   const getStatusProgress = (status: string) => {
     const statusMap = {

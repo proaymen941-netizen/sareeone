@@ -271,62 +271,6 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
     }
   });
 
-  // تحديث حالة السائق
-  useEffect(() => {
-    if (!driverId) return;
-
-    // إعداد WebSocket للتحديثات اللحظية
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
-    const socket = new WebSocket(wsUrl);
-
-    socket.onopen = () => {
-      console.log('WS connected');
-      socket.send(JSON.stringify({ type: 'auth', payload: { userId: driverId } }));
-    };
-
-    socket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'new_order_available') {
-        toast({
-          title: "طلب جديد متاح! 🔔",
-          description: data.payload.message,
-        });
-        refetchAvailable();
-      }
-    };
-
-    // إرسال الموقع الجغرافي بشكل دوري
-    const sendLocation = () => {
-      if (navigator.geolocation && driverStatus === 'available') {
-        navigator.geolocation.getCurrentPosition(async (position) => {
-          const { latitude, longitude } = position.coords;
-          try {
-            await fetch('/api/drivers/update-location', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ driverId, latitude, longitude })
-            });
-            // أيضاً إرسال عبر السوكيت لسرعة أكبر
-            socket.send(JSON.stringify({ 
-              type: 'location_update', 
-              payload: { driverId, latitude, longitude } 
-            }));
-          } catch (err) {
-            console.error('فشل في تحديث الموقع:', err);
-          }
-        });
-      }
-    };
-
-    const locationInterval = setInterval(sendLocation, 30000); // كل 30 ثانية
-
-    return () => {
-      socket.close();
-      clearInterval(locationInterval);
-    };
-  }, [driverId, driverStatus, refetchAvailable, toast]);
-
   const handleLogout = () => {
     localStorage.removeItem('driver_token');
     localStorage.removeItem('driver_user');
