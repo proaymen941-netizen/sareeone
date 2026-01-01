@@ -96,7 +96,7 @@ export default function ImageUpload({
       <div className="flex gap-2">
         <Input
           id={testId}
-          value={value}
+          value={value?.startsWith('data:image') ? 'صورة مرفوعة' : value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           required={required}
