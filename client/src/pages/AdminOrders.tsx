@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Package, CheckCircle, XCircle, Phone, MapPin, Filter, Navigation, Search } from 'lucide-react';
+import { Package, CheckCircle, XCircle, Phone, MapPin, Filter, Navigation, Search, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -8,16 +8,21 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
-import type { Order } from '@shared/schema';
+import type { Order, Driver } from '@shared/schema';
 
 export default function AdminOrders() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedDriver, setSelectedDriver] = useState<Record<string, string>>({});
 
   const { data: orders, isLoading } = useQuery<Order[]>({
     queryKey: statusFilter !== 'all' ? ['/api/orders', statusFilter] : ['/api/orders'],
+  });
+
+  const { data: drivers } = useQuery<Driver[]>({
+    queryKey: ['/api/drivers'],
   });
 
   const updateOrderStatusMutation = useMutation({
@@ -30,6 +35,20 @@ export default function AdminOrders() {
       toast({
         title: "تم تحديث حالة الطلب",
         description: "تم تحديث حالة الطلب بنجاح",
+      });
+    },
+  });
+
+  const assignDriverMutation = useMutation({
+    mutationFn: async ({ id, driverId }: { id: string; driverId: string }) => {
+      const response = await apiRequest('PUT', `/api/orders/${id}/assign-driver`, { driverId });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      toast({
+        title: "تم تعيين السائق",
+        description: "تم توجيه الطلب للسائق بنجاح",
       });
     },
   });
@@ -251,7 +270,34 @@ export default function AdminOrders() {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex gap-2 pt-4 border-t border-border">
+                  <div className="flex flex-wrap gap-2 pt-4 border-t border-border">
+                    {order.status === 'confirmed' && !order.driverId && (
+                      <div className="flex items-center gap-2 w-full md:w-auto">
+                        <Select 
+                          value={selectedDriver[order.id] || ''} 
+                          onValueChange={(val) => setSelectedDriver(prev => ({ ...prev, [order.id]: val }))}
+                        >
+                          <SelectTrigger className="w-48">
+                            <SelectValue placeholder="اختر سائقاً" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none" disabled>اختر سائقاً</SelectItem>
+                            {drivers?.filter(d => d.isAvailable).map(driver => (
+                              <SelectItem key={driver.id} value={driver.id}>{driver.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          onClick={() => assignDriverMutation.mutate({ id: order.id, driverId: selectedDriver[order.id] })}
+                          disabled={!selectedDriver[order.id] || assignDriverMutation.isPending}
+                          className="gap-2"
+                        >
+                          <Truck className="h-4 w-4" />
+                          تعيين سائق
+                        </Button>
+                      </div>
+                    )}
+
                     {nextStatus && order.status !== 'delivered' && order.status !== 'cancelled' && (
                       <Button
                         onClick={() => updateOrderStatusMutation.mutate({ 
