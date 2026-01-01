@@ -217,7 +217,7 @@ router.put("/:id/assign-driver", async (req, res) => {
     // تحديث الطلب
     const updatedOrder = await storage.updateOrder(id, {
       driverId,
-      status: 'preparing',
+      status: 'confirmed', // إبقاء الحالة مؤكدة ليراها السائق في "الطلبات المتاحة" أو "الموجهة"
       updatedAt: new Date()
     });
 
