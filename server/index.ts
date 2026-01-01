@@ -4,7 +4,6 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./viteServer";
 import { seedDefaultData } from "./seed";
 import { storage } from "./storage";
-import { setupWebSockets } from "./socket";
 
 const app = express();
 app.use(express.json());
@@ -52,8 +51,6 @@ app.use((req, res, next) => {
 (async () => {
   try {
     const server = await registerRoutes(app);
-    const wss = setupWebSockets(server);
-    app.set("wss", wss); // Make it available to routes
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;

@@ -283,33 +283,4 @@ router.put("/profile", async (req, res) => {
   }
 });
 
-// تحديث الموقع الجغرافي للسائق (تحديث لحظي)
-router.post("/update-location", async (req, res) => {
-  try {
-    const { driverId, latitude, longitude } = req.body;
-    
-    if (!driverId || latitude === undefined || longitude === undefined) {
-      return res.status(400).json({ error: "البيانات ناقصة" });
-    }
-
-    // تحديث في قاعدة البيانات
-    await storage.updateDriver(driverId, { 
-      latitude: String(latitude), 
-      longitude: String(longitude),
-      updatedAt: new Date() 
-    });
-
-    // بث الموقع عبر WebSocket للعملاء والمسؤول
-    const wss = req.app.get("wss");
-    if (wss) {
-      wss.broadcast("driver_location", { driverId, latitude, longitude });
-    }
-
-    res.json({ success: true });
-  } catch (error) {
-    console.error("خطأ في تحديث الموقع:", error);
-    res.status(500).json({ error: "خطأ في الخادم" });
-  }
-});
-
 export default router;
