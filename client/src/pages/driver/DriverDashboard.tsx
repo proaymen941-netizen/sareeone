@@ -89,9 +89,9 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
       const data = await response.json();
       console.log('الطلبات المستلمة:', data);
       
-      // فلترة الطلبات غير المعينة لسائق
+      // فلترة الطلبات غير المعينة لسائق أو المعينة لهذا السائق تحديداً (في حال تم التوجيه من الإدارة)
       const filteredOrders = Array.isArray(data) 
-        ? data.filter((order: Order) => !order.driverId)
+        ? data.filter((order: Order) => !order.driverId || order.driverId === driverId)
         : [];
       
       console.log('الطلبات المتاحة بعد الفلترة:', filteredOrders);
@@ -449,7 +449,15 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
                   className="gap-2"
                 >
                   <Phone className="h-4 w-4" />
-                  اتصال
+                  اتصال بالعميل
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => window.open(`tel:+967771234567`)} // رقم الإدارة الافتراضي
+                  className="gap-2 border-red-200 text-red-600 hover:bg-red-50"
+                >
+                  <Phone className="h-4 w-4" />
+                  اتصال بالإدارة
                 </Button>
                 
                 <Button
@@ -459,10 +467,10 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
                     const encodedAddress = encodeURIComponent(order.deliveryAddress);
                     window.open(`https://www.google.com/maps/search/?api=1&query=${encodedAddress}`, '_blank');
                   }}
-                  className="gap-2"
+                  className="gap-2 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
                 >
                   <Navigation className="h-4 w-4" />
-                  التنقل
+                  تتبع الموقع
                 </Button>
 
                 {getNextStatus(order.status || '') && (
