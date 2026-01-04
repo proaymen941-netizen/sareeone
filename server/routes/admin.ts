@@ -151,14 +151,14 @@ router.get("/dashboard", async (req, res) => {
     // حساب الإيرادات
     const deliveredOrders = orders.filter(order => order.status === "delivered");
     const totalRevenue = deliveredOrders.reduce((sum, order) => 
-      sum + parseFloat(order.total || "0"), 0
+      sum + parseFloat(order.totalAmount || order.total || "0"), 0
     );
     
     const todayDeliveredOrders = deliveredOrders.filter(order => 
       order.createdAt.toDateString() === today
     );
     const todayRevenue = todayDeliveredOrders.reduce((sum, order) => 
-      sum + parseFloat(order.total || "0"), 0
+      sum + parseFloat(order.totalAmount || order.total || "0"), 0
     );
 
     // الطلبات الأخيرة (أحدث 10 طلبات)
@@ -589,8 +589,107 @@ router.put("/orders/:id/status", async (req: any, res) => {
   }
 });
 
-// إدارة السائقين
-router.get("/drivers", async (req, res) => {
+// جلب إحصائيات تقارير المطاعم
+router.get("/reports/restaurants", async (req, res) => {
+  try {
+    const { startDate, endDate, categoryId } = req.query;
+    
+    const allRestaurants = await storage.getRestaurants({ categoryId: categoryId as string });
+    const allOrders = await storage.getOrders();
+    
+    const reports = allRestaurants.map(restaurant => {
+      const restaurantOrders = allOrders.filter(order => 
+        order.restaurantId === restaurant.id &&
+        (order.status === 'delivered') &&
+        (!startDate || new Date(order.createdAt) >= new Date(startDate as string)) &&
+        (!endDate || new Date(order.createdAt) <= new Date(endDate as string))
+      );
+      
+      const totalSales = restaurantOrders.reduce((sum, order) => sum + parseFloat(order.totalAmount || order.total || "0"), 0);
+      const totalOrders = restaurantOrders.length;
+      const avgOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
+      const commissionRate = 0.15; // 15% عمولة افتراضية
+      const totalCommission = totalSales * commissionRate;
+      const amountDue = totalSales - totalCommission;
+      
+      return {
+        id: restaurant.id,
+        name: restaurant.name,
+        category: restaurant.categoryId,
+        totalOrders,
+        totalSales,
+        avgOrderValue,
+        commissionRate: commissionRate * 100,
+        amountDue
+      };
+    });
+    
+    res.json(reports);
+  } catch (error) {
+    console.error("Error in restaurant reports:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// جلب تقرير تفصيلي لمطعم محدد
+router.get("/reports/restaurants/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const restaurant = await storage.getRestaurant(id);
+    if (!restaurant) return res.status(404).json({ error: "Restaurant not found" });
+    
+    const allOrders = await storage.getOrders();
+    const restaurantOrders = allOrders.filter(order => order.restaurantId === id);
+    const deliveredOrders = restaurantOrders.filter(order => order.status === 'delivered');
+    
+    const totalSales = deliveredOrders.reduce((sum, order) => sum + parseFloat(order.totalAmount || order.total || "0"), 0);
+    const commissionRate = 0.15;
+    const totalCommission = totalSales * commissionRate;
+    
+    // تحليل المبيعات (يومي، أسبوعي، شهري)
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthStart = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+    
+    const salesToday = deliveredOrders.filter(o => new Date(o.createdAt) >= todayStart).reduce((s, o) => s + parseFloat(o.totalAmount || o.total || "0"), 0);
+    const salesWeek = deliveredOrders.filter(o => new Date(o.createdAt) >= weekStart).reduce((s, o) => s + parseFloat(o.totalAmount || o.total || "0"), 0);
+    const salesMonth = deliveredOrders.filter(o => new Date(o.createdAt) >= monthStart).reduce((s, o) => s + parseFloat(o.totalAmount || o.total || "0"), 0);
+    
+    const cancelledCount = restaurantOrders.filter(o => o.status === 'cancelled').length;
+    const cancellationRate = restaurantOrders.length > 0 ? (cancelledCount / restaurantOrders.length) * 100 : 0;
+    
+    res.json({
+      restaurant,
+      financials: {
+        totalSales,
+        totalCommission,
+        netAmount: totalSales - totalCommission,
+        salesToday,
+        salesWeek,
+        salesMonth,
+        deliveryFees: deliveredOrders.reduce((s, o) => s + parseFloat(o.deliveryFee || "0"), 0),
+      },
+      analytics: {
+        totalOrders: restaurantOrders.length,
+        deliveredOrders: deliveredOrders.length,
+        cancellationRate,
+        avgDeliveryTime: restaurant.deliveryTime
+      },
+      transactions: deliveredOrders.map(o => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        date: o.createdAt,
+        total: parseFloat(o.totalAmount || o.total || "0"),
+        commission: parseFloat(o.totalAmount || o.total || "0") * commissionRate,
+        net: parseFloat(o.totalAmount || o.total || "0") * (1 - commissionRate),
+        status: 'paid'
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
   try {
     const drivers = await dbStorage.getDrivers();
     

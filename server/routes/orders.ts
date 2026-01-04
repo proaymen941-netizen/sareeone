@@ -217,7 +217,7 @@ router.put("/:id/assign-driver", async (req, res) => {
     // تحديث الطلب
     const updatedOrder = await storage.updateOrder(id, {
       driverId,
-      status: 'confirmed', // إبقاء الحالة مؤكدة ليراها السائق في "الطلبات المتاحة" أو "الموجهة"
+      status: 'on_way', // تغيير الحالة إلى "في الطريق" عند التعيين
       updatedAt: new Date()
     });
 
@@ -226,13 +226,13 @@ router.put("/:id/assign-driver", async (req, res) => {
 
     // إنشاء إشعارات
     try {
-      // إشعار للعميل
+      // إشعار مباشر للسائق المعين
       await storage.createNotification({
-        type: 'order_assigned',
-        title: 'تم تعيين سائق لطلبك',
-        message: `السائق ${driver.name} سيقوم بتوصيل طلبك`,
-        recipientType: 'customer',
-        recipientId: order.customerId || order.customerPhone,
+        type: 'new_order_assigned',
+        title: 'طلب جديد مُعين لك',
+        message: `تم تعيينك لتوصيل الطلب رقم ${order.orderNumber} من مطعم ${restaurant.name}`,
+        recipientType: 'driver',
+        recipientId: driverId,
         orderId: id,
         isRead: false
       });
