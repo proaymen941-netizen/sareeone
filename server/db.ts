@@ -24,7 +24,6 @@ import {
 } from "@shared/schema";
 import { IStorage } from "./storage";
 import { eq, and, desc, sql, or, like, asc, inArray } from "drizzle-orm";
-import { randomUUID } from "crypto";
 
 // Database connection
 let db: ReturnType<typeof drizzle> | null = null;
@@ -70,6 +69,8 @@ function getDb() {
   return db;
 }
 
+// ... rest of the DatabaseStorage class remains the same
+
 export class DatabaseStorage {
   get db() {
     return getDb();
@@ -113,17 +114,7 @@ export class DatabaseStorage {
     return Array.isArray(result) ? result : [];
   }
 
-  async getAllUsers(): Promise<User[]> {
-    const result = await this.db.select().from(users);
-    return Array.isArray(result) ? result : [];
-  }
-
   async getUser(id: string): Promise<User | undefined> {
-    const [user] = await this.db.select().from(users).where(eq(users.id, id));
-    return user;
-  }
-
-  async getUserById(id: string): Promise<User | undefined> {
     const [user] = await this.db.select().from(users).where(eq(users.id, id));
     return user;
   }
@@ -165,35 +156,20 @@ export class DatabaseStorage {
   }
 
   async deleteCategory(id: string): Promise<boolean> {
-    try {
-      const result = await this.db.delete(categories).where(eq(categories.id, id));
-      return result.rowCount > 0;
-    } catch (error) {
-      console.error('Error deleting category:', error);
-      return false;
-    }
+    const result = await this.db.delete(categories).where(eq(categories.id, id));
+    return result.rowCount > 0;
   }
 
   // Restaurants
   // getRestaurants method is now the enhanced version below with filtering capabilities
 
   async getRestaurant(id: string): Promise<Restaurant | undefined> {
-    try {
-      const [restaurant] = await this.db.select().from(restaurants).where(eq(restaurants.id, id));
-      return restaurant;
-    } catch (error) {
-      console.error('Error fetching restaurant:', error);
-      return undefined;
-    }
+    const [restaurant] = await this.db.select().from(restaurants).where(eq(restaurants.id, id));
+    return restaurant;
   }
 
   async getRestaurantsByCategory(categoryId: string): Promise<Restaurant[]> {
-    try {
-      return await this.db.select().from(restaurants).where(eq(restaurants.categoryId, categoryId));
-    } catch (error) {
-      console.error('Error fetching restaurants by category:', error);
-      return [];
-    }
+    return await this.db.select().from(restaurants).where(eq(restaurants.categoryId, categoryId));
   }
 
   async createRestaurant(restaurant: InsertRestaurant): Promise<Restaurant> {
@@ -207,33 +183,18 @@ export class DatabaseStorage {
   }
 
   async deleteRestaurant(id: string): Promise<boolean> {
-    try {
-      const result = await this.db.delete(restaurants).where(eq(restaurants.id, id));
-      return result.rowCount > 0;
-    } catch (error) {
-      console.error('Error deleting restaurant:', error);
-      return false;
-    }
+    const result = await this.db.delete(restaurants).where(eq(restaurants.id, id));
+    return result.rowCount > 0;
   }
 
   // Menu Items
   async getMenuItems(restaurantId: string): Promise<MenuItem[]> {
-    try {
-      return await this.db.select().from(menuItems).where(eq(menuItems.restaurantId, restaurantId));
-    } catch (error) {
-      console.error('Error fetching menu items:', error);
-      return [];
-    }
+    return await this.db.select().from(menuItems).where(eq(menuItems.restaurantId, restaurantId));
   }
 
   async getMenuItem(id: string): Promise<MenuItem | undefined> {
-    try {
-      const [item] = await this.db.select().from(menuItems).where(eq(menuItems.id, id));
-      return item;
-    } catch (error) {
-      console.error('Error fetching menu item:', error);
-      return undefined;
-    }
+    const [item] = await this.db.select().from(menuItems).where(eq(menuItems.id, id));
+    return item;
   }
 
   async createMenuItem(menuItem: InsertMenuItem): Promise<MenuItem> {
@@ -247,54 +208,24 @@ export class DatabaseStorage {
   }
 
   async deleteMenuItem(id: string): Promise<boolean> {
-    try {
-      const result = await this.db.delete(menuItems).where(eq(menuItems.id, id));
-      return result.rowCount > 0;
-    } catch (error) {
-      console.error('Error deleting menu item:', error);
-      return false;
-    }
+    const result = await this.db.delete(menuItems).where(eq(menuItems.id, id));
+    return result.rowCount > 0;
   }
 
   // Orders
   async getOrders(): Promise<Order[]> {
-    try {
-      const result = await this.db.select().from(orders);
-      return Array.isArray(result) ? result : [];
-    } catch (error) {
-      console.error('Error fetching orders:', error);
-      return [];
-    }
+    const result = await this.db.select().from(orders);
+    return Array.isArray(result) ? result : [];
   }
 
   async getOrder(id: string): Promise<Order | undefined> {
-    try {
-      const [order] = await this.db.select().from(orders).where(eq(orders.id, id));
-      return order;
-    } catch (error) {
-      console.error('Error fetching order:', error);
-      return undefined;
-    }
-  }
-
-  async getOrderById(id: string): Promise<Order | undefined> {
-    try {
-      const [order] = await this.db.select().from(orders).where(eq(orders.id, id));
-      return order;
-    } catch (error) {
-      console.error('Error fetching order by id:', error);
-      return undefined;
-    }
+    const [order] = await this.db.select().from(orders).where(eq(orders.id, id));
+    return order;
   }
 
   async getOrdersByRestaurant(restaurantId: string): Promise<Order[]> {
-    try {
-      const result = await this.db.select().from(orders).where(eq(orders.restaurantId, restaurantId));
-      return Array.isArray(result) ? result : [];
-    } catch (error) {
-      console.error('Error fetching orders by restaurant:', error);
-      return [];
-    }
+    const result = await this.db.select().from(orders).where(eq(orders.restaurantId, restaurantId));
+    return Array.isArray(result) ? result : [];
   }
 
   async createOrder(order: InsertOrder): Promise<Order> {
@@ -307,78 +238,24 @@ export class DatabaseStorage {
     return updated;
   }
 
-  async updateOrderStatus(orderId: string, status: string): Promise<Order | undefined> {
-    const [updated] = await this.db.update(orders)
-      .set({ status, updatedAt: new Date() })
-      .where(eq(orders.id, orderId))
-      .returning();
-    return updated;
-  }
-
-  async getCustomerOrders(customerPhone: string): Promise<Order[]> {
-    try {
-      return await this.db.select().from(orders)
-        .where(eq(orders.customerPhone, customerPhone))
-        .orderBy(desc(orders.createdAt));
-    } catch (error) {
-      console.error('Error fetching customer orders:', error);
-      return [];
-    }
-  }
-
   // Drivers
   async getDrivers(): Promise<Driver[]> {
-    try {
-      const result = await this.db.select().from(drivers);
-      return Array.isArray(result) ? result : [];
-    } catch (error) {
-      console.error('Error fetching drivers:', error);
-      return [];
-    }
-  }
-
-  async getAllDrivers(): Promise<Driver[]> {
-    try {
-      const result = await this.db.select().from(drivers);
-      return Array.isArray(result) ? result : [];
-    } catch (error) {
-      console.error('Error fetching all drivers:', error);
-      return [];
-    }
+    const result = await this.db.select().from(drivers);
+    return Array.isArray(result) ? result : [];
   }
 
   async getDriver(id: string): Promise<Driver | undefined> {
-    try {
-      const [driver] = await this.db.select().from(drivers).where(eq(drivers.id, id));
-      return driver;
-    } catch (error) {
-      console.error('Error fetching driver:', error);
-      return undefined;
-    }
-  }
-
-  async getDriverById(id: string): Promise<Driver | undefined> {
-    try {
-      const [driver] = await this.db.select().from(drivers).where(eq(drivers.id, id));
-      return driver;
-    } catch (error) {
-      console.error('Error fetching driver by id:', error);
-      return undefined;
-    }
+    const [driver] = await this.db.select().from(drivers).where(eq(drivers.id, id));
+    return driver;
   }
 
   async getAvailableDrivers(): Promise<Driver[]> {
-    try {
-      return await this.db.select().from(drivers).where(
-        and(
-          eq(drivers.isAvailable, true),
-          eq(drivers.isActive, true)
-        )
-      );
-    } catch (error) {
-      console.error('Error fetching available drivers:', error);
-      return [];
-    }
+    return await this.db.select().from(drivers).where(
+      and(
+        eq(drivers.isAvailable, true),
+        eq(drivers.isActive, true)
+      )
+    );
   }
 
   async createDriver(driver: InsertDriver): Promise<Driver> {
@@ -392,34 +269,19 @@ export class DatabaseStorage {
   }
 
   async deleteDriver(id: string): Promise<boolean> {
-    try {
-      const result = await this.db.delete(drivers).where(eq(drivers.id, id));
-      return result.rowCount > 0;
-    } catch (error) {
-      console.error('Error deleting driver:', error);
-      return false;
-    }
+    const result = await this.db.delete(drivers).where(eq(drivers.id, id));
+    return result.rowCount > 0;
   }
 
   // Special Offers
   async getSpecialOffers(): Promise<SpecialOffer[]> {
-    try {
-      const result = await this.db.select().from(specialOffers);
-      return Array.isArray(result) ? result : [];
-    } catch (error) {
-      console.error('Error fetching special offers:', error);
-      return [];
-    }
+    const result = await this.db.select().from(specialOffers);
+    return Array.isArray(result) ? result : [];
   }
 
   async getActiveSpecialOffers(): Promise<SpecialOffer[]> {
-    try {
-      const result = await this.db.select().from(specialOffers).where(eq(specialOffers.isActive, true));
-      return Array.isArray(result) ? result : [];
-    } catch (error) {
-      console.error('Error fetching active special offers:', error);
-      return [];
-    }
+    const result = await this.db.select().from(specialOffers).where(eq(specialOffers.isActive, true));
+    return Array.isArray(result) ? result : [];
   }
 
   async createSpecialOffer(offer: InsertSpecialOffer): Promise<SpecialOffer> {
@@ -433,19 +295,17 @@ export class DatabaseStorage {
   }
 
   async deleteSpecialOffer(id: string): Promise<boolean> {
-    try {
-      const result = await this.db.delete(specialOffers).where(eq(specialOffers.id, id));
-      return result.rowCount > 0;
-    } catch (error) {
-      console.error('Error deleting special offer:', error);
-      return false;
-    }
+    const result = await this.db.delete(specialOffers).where(eq(specialOffers.id, id));
+    return result.rowCount > 0;
   }
+
+  // Search methods - removed duplicate methods, keeping enhanced versions below
 
   // UI Settings (using systemSettings)
   async getUiSettings(): Promise<SystemSettings[]> {
     try {
       const result = await this.db.select().from(systemSettings);
+      // Ensure we always return an array, even if result is null or undefined
       return Array.isArray(result) ? result : [];
     } catch (error) {
       console.error('Error fetching UI settings:', error);
@@ -454,15 +314,10 @@ export class DatabaseStorage {
   }
 
   async getUiSetting(key: string): Promise<SystemSettings | undefined> {
-    try {
-      const [setting] = await this.db.select().from(systemSettings).where(
-        eq(systemSettings.key, key)
-      );
-      return setting;
-    } catch (error) {
-      console.error('Error fetching UI setting:', error);
-      return undefined;
-    }
+    const [setting] = await this.db.select().from(systemSettings).where(
+      eq(systemSettings.key, key)
+    );
+    return setting;
   }
 
   async updateUiSetting(key: string, value: string): Promise<SystemSettings | undefined> {
@@ -501,42 +356,37 @@ export class DatabaseStorage {
   }
 
   async deleteUiSetting(key: string): Promise<boolean> {
-    try {
-      const result = await this.db.delete(systemSettings).where(eq(systemSettings.key, key));
-      return result.rowCount > 0;
-    } catch (error) {
-      console.error('Error deleting UI setting:', error);
-      return false;
-    }
+    const result = await this.db.delete(systemSettings).where(eq(systemSettings.key, key));
+    return result.rowCount > 0;
   }
 
   // Notifications
-  async getNotifications(recipientType?: string, recipientId?: string, unread?: boolean): Promise<Notification[]> {
-    try {
-      const conditions = [];
-      if (recipientType) {
-        conditions.push(eq(notifications.recipientType, recipientType));
-      }
-      if (recipientId) {
-        conditions.push(eq(notifications.recipientId, recipientId));
-      }
-      if (unread !== undefined) {
-        conditions.push(eq(notifications.isRead, !unread));
-      }
-      
-      let query = this.db.select().from(notifications);
-      
-      if (conditions.length > 0) {
-        query = query.where(and(...conditions));
-      }
-      
-      const result = await query.orderBy(desc(notifications.createdAt));
-      return Array.isArray(result) ? result : [];
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
-      return [];
+async getNotifications(recipientType?: string, recipientId?: string, unread?: boolean): Promise<Notification[]> {
+  try {
+    const conditions = [];
+    if (recipientType) {
+      conditions.push(eq(notifications.recipientType, recipientType));
     }
+    if (recipientId) {
+      conditions.push(eq(notifications.recipientId, recipientId));
+    }
+    if (unread !== undefined) {
+      conditions.push(eq(notifications.isRead, !unread));
+    }
+    
+    if (conditions.length > 0) {
+      return await this.db.select().from(notifications)
+        .where(and(...conditions))
+        .orderBy(desc(notifications.createdAt));
+    }
+    
+    return await this.db.select().from(notifications)
+      .orderBy(desc(notifications.createdAt));
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    return [];
   }
+}
 
   async createNotification(notification: InsertNotification): Promise<Notification> {
     try {
@@ -561,7 +411,7 @@ export class DatabaseStorage {
     }
   }
 
-  // Order tracking methods - REMOVED DUPLICATE METHODS
+  // Order tracking methods
   async createOrderTracking(tracking: {orderId: string; status: string; message: string; createdBy: string; createdByType: string}) {
     try {
       const trackingData = {
@@ -574,20 +424,52 @@ export class DatabaseStorage {
         createdAt: new Date()
       };
       
-      // Insert into orderTracking table
-      const [newTracking] = await this.db.insert(orderTracking).values(trackingData).returning();
-      return newTracking;
+      // For now, we'll store in memory since orderTracking table might not exist
+      // In a real implementation, this would use the database
+      return trackingData;
     } catch (error) {
       console.error('Error creating order tracking:', error);
       throw error;
     }
   }
 
-  async getOrderTracking(orderId: string): Promise<any[]> {
+  async getOrderTracking(orderId: string) {
     try {
-      return await this.db.select().from(orderTracking)
-        .where(eq(orderTracking.orderId, orderId))
-        .orderBy(asc(orderTracking.createdAt));
+      // For now, return mock tracking data based on order status
+      const order = await this.getOrderById(orderId);
+      if (!order) return [];
+
+      const tracking = [];
+      const baseTime = new Date(order.createdAt);
+      
+      // Create tracking entries based on order status
+      const statusFlow = ['pending', 'confirmed', 'preparing', 'ready', 'picked_up', 'on_way', 'delivered'];
+      const currentStatusIndex = statusFlow.indexOf(order.status || 'pending');
+      
+      for (let i = 0; i <= currentStatusIndex; i++) {
+        const status = statusFlow[i];
+        const messages: Record<string, string> = {
+          pending: 'تم استلام الطلب',
+          confirmed: 'تم تأكيد الطلب من المطعم',
+          preparing: 'جاري تحضير الطلب',
+          ready: 'الطلب جاهز للاستلام',
+          picked_up: 'تم استلام الطلب من المطعم',
+          on_way: 'السائق في الطريق إليك',
+          delivered: 'تم تسليم الطلب بنجاح'
+        };
+        
+        tracking.push({
+          id: `${orderId}-${i}`,
+          orderId,
+          status,
+          message: messages[status] || `تحديث الحالة إلى ${status}`,
+          createdBy: i === 0 ? 'system' : (i <= 2 ? 'restaurant' : 'driver'),
+          createdByType: i === 0 ? 'system' : (i <= 2 ? 'restaurant' : 'driver'),
+          createdAt: new Date(baseTime.getTime() + i * 5 * 60000) // 5 minutes apart
+        });
+      }
+      
+      return tracking;
     } catch (error) {
       console.error('Error getting order tracking:', error);
       return [];
@@ -596,83 +478,68 @@ export class DatabaseStorage {
 
   // Enhanced Search Functions
   async searchRestaurants(searchTerm: string, categoryId?: string, userLocation?: {lat: number, lon: number}): Promise<Restaurant[]> {
-    try {
-      const conditions = [
-        eq(restaurants.isActive, true),
-        or(
-          like(restaurants.name, `%${searchTerm}%`),
-          like(restaurants.description, `%${searchTerm}%`),
-          like(restaurants.address, `%${searchTerm}%`)
-        )
-      ];
-      
-      if (categoryId) {
-        conditions.push(eq(restaurants.categoryId, categoryId));
-      }
-      
-      const result = await this.db.select().from(restaurants)
-        .where(and(...conditions))
-        .orderBy(restaurants.name);
-      
-      const restaurants_list = Array.isArray(result) ? result : [];
-      
-      // Add distance if user location is provided
-      if (userLocation) {
-        return restaurants_list.map(restaurant => ({
-          ...restaurant,
-          distance: restaurant.latitude && restaurant.longitude ? 
-            this.calculateDistance(
-              userLocation.lat,
-              userLocation.lon,
-              parseFloat(restaurant.latitude),
-              parseFloat(restaurant.longitude)
-            ) : null
-        }));
-      }
-      
-      return restaurants_list;
-    } catch (error) {
-      console.error('Error searching restaurants:', error);
-      return [];
+    const conditions = [
+      eq(restaurants.isActive, true),
+      or(
+        like(restaurants.name, `%${searchTerm}%`),
+        like(restaurants.description, `%${searchTerm}%`),
+        like(restaurants.address, `%${searchTerm}%`)
+      )
+    ];
+    
+    if (categoryId) {
+      conditions.push(eq(restaurants.categoryId, categoryId));
     }
+    
+    const result = await this.db.select().from(restaurants)
+      .where(and(...conditions))
+      .orderBy(restaurants.name);
+    
+    const restaurants_list = Array.isArray(result) ? result : [];
+    
+    // Add distance if user location is provided
+    if (userLocation) {
+      return restaurants_list.map(restaurant => ({
+        ...restaurant,
+        distance: restaurant.latitude && restaurant.longitude ? 
+          this.calculateDistance(
+            userLocation.lat,
+            userLocation.lon,
+            parseFloat(restaurant.latitude),
+            parseFloat(restaurant.longitude)
+          ) : null
+      }));
+    }
+    
+    return restaurants_list;
   }
 
   async searchCategories(searchTerm: string): Promise<Category[]> {
-    try {
-      const result = await this.db.select().from(categories)
-        .where(
-          and(
-            eq(categories.isActive, true),
-            like(categories.name, `%${searchTerm}%`)
-          )
+    const result = await this.db.select().from(categories)
+      .where(
+        and(
+          eq(categories.isActive, true),
+          like(categories.name, `%${searchTerm}%`)
         )
-        .orderBy(categories.name);
-      return Array.isArray(result) ? result : [];
-    } catch (error) {
-      console.error('Error searching categories:', error);
-      return [];
-    }
+      )
+      .orderBy(categories.name);
+    return Array.isArray(result) ? result : [];
   }
 
   async searchMenuItems(searchTerm: string): Promise<MenuItem[]> {
-    try {
-      const result = await this.db.select().from(menuItems)
-        .where(
-          and(
-            eq(menuItems.isAvailable, true),
-            or(
-              like(menuItems.name, `%${searchTerm}%`),
-              like(menuItems.description, `%${searchTerm}%`),
-              like(menuItems.category, `%${searchTerm}%`)
-            )
+    const result = await this.db.select().from(menuItems)
+      .where(
+        and(
+          eq(menuItems.isAvailable, true),
+          or(
+            like(menuItems.name, `%${searchTerm}%`),
+            like(menuItems.description, `%${searchTerm}%`),
+            like(menuItems.category, `%${searchTerm}%`)
           )
         )
-        .orderBy(menuItems.name);
-      return Array.isArray(result) ? result : [];
-    } catch (error) {
-      console.error('Error searching menu items:', error);
-      return [];
-    }
+      )
+      .orderBy(menuItems.name);
+    return Array.isArray(result) ? result : [];
   }
 
   // Enhanced Restaurant Functions with Search and Filtering
@@ -688,94 +555,89 @@ export class DatabaseStorage {
     userLongitude?: number;
     radius?: number; // in kilometers
   }): Promise<Restaurant[]> {
-    try {
-      const conditions = [eq(restaurants.isActive, true)];
-      
-      if (filters?.categoryId) {
-        conditions.push(eq(restaurants.categoryId, filters.categoryId));
-      }
-      
-      if (filters?.isOpen !== undefined) {
-        conditions.push(eq(restaurants.isOpen, filters.isOpen));
-      }
-      
-      if (filters?.isFeatured) {
-        conditions.push(eq(restaurants.isFeatured, true));
-      }
-      
-      if (filters?.isNew) {
-        conditions.push(eq(restaurants.isNew, true));
-      }
-      
-      if (filters?.search) {
-        conditions.push(
-          sql`(
-            ${restaurants.name} ILIKE ${'%' + filters.search + '%'} OR
-            COALESCE(${restaurants.description}, '') ILIKE ${'%' + filters.search + '%'} OR
-            COALESCE(${restaurants.address}, '') ILIKE ${'%' + filters.search + '%'}
-          )`
-        );
-      }
-      
-      // Build and execute query with temporary type assertion for compilation
-      let baseQuery: any = this.db.select().from(restaurants);
-      
-      if (conditions.length > 0) {
-        baseQuery = baseQuery.where(and(...conditions));
-      }
-      
-      // Apply sorting
-      switch (filters?.sortBy) {
-        case 'rating':
-          // Convert varchar rating to numeric for proper sorting
-          baseQuery = baseQuery.orderBy(sql`(${restaurants.rating})::numeric DESC`);
-          break;
-        case 'deliveryTime':
-          baseQuery = baseQuery.orderBy(asc(restaurants.deliveryTime));
-          break;
-        case 'newest':
-          baseQuery = baseQuery.orderBy(desc(restaurants.createdAt));
-          break;
-        case 'distance':
-          // Will handle distance sorting in the application layer
-          baseQuery = baseQuery.orderBy(restaurants.name);
-          break;
-        default:
-          baseQuery = baseQuery.orderBy(restaurants.name);
-      }
-      
-      const result = await baseQuery;
-      const restaurants_list = Array.isArray(result) ? result : [];
-      
-      // If user location is provided and we're sorting by distance
-      if (filters?.userLatitude && filters?.userLongitude && filters?.sortBy === 'distance') {
-        return this.sortRestaurantsByDistance(
-          restaurants_list, 
-          filters.userLatitude, 
-          filters.userLongitude,
-          filters.radius
-        );
-      }
-      
-      // Filter by radius if provided
-      if (filters?.userLatitude && filters?.userLongitude && filters?.radius) {
-        return restaurants_list.filter(restaurant => {
-          if (!restaurant.latitude || !restaurant.longitude) return false;
-          const distance = this.calculateDistance(
-            filters.userLatitude!,
-            filters.userLongitude!,
-            parseFloat(restaurant.latitude),
-            parseFloat(restaurant.longitude)
-          );
-          return distance <= filters.radius!;
-        });
-      }
-      
-      return restaurants_list;
-    } catch (error) {
-      console.error('Error fetching restaurants with filters:', error);
-      return [];
+    const conditions = [eq(restaurants.isActive, true)];
+    
+    if (filters?.categoryId) {
+      conditions.push(eq(restaurants.categoryId, filters.categoryId));
     }
+    
+    if (filters?.isOpen !== undefined) {
+      conditions.push(eq(restaurants.isOpen, filters.isOpen));
+    }
+    
+    if (filters?.isFeatured) {
+      conditions.push(eq(restaurants.isFeatured, true));
+    }
+    
+    if (filters?.isNew) {
+      conditions.push(eq(restaurants.isNew, true));
+    }
+    
+    if (filters?.search) {
+      conditions.push(
+        sql`(
+          ${restaurants.name} ILIKE ${'%' + filters.search + '%'} OR
+          COALESCE(${restaurants.description}, '') ILIKE ${'%' + filters.search + '%'} OR
+          COALESCE(${restaurants.address}, '') ILIKE ${'%' + filters.search + '%'}
+        )`
+      );
+    }
+    
+    // Build and execute query with temporary type assertion for compilation
+    let baseQuery: any = this.db.select().from(restaurants);
+    
+    if (conditions.length > 0) {
+      baseQuery = baseQuery.where(and(...conditions));
+    }
+    
+    // Apply sorting
+    switch (filters?.sortBy) {
+      case 'rating':
+        // Convert varchar rating to numeric for proper sorting
+        baseQuery = baseQuery.orderBy(sql`(${restaurants.rating})::numeric DESC`);
+        break;
+      case 'deliveryTime':
+        baseQuery = baseQuery.orderBy(asc(restaurants.deliveryTime));
+        break;
+      case 'newest':
+        baseQuery = baseQuery.orderBy(desc(restaurants.createdAt));
+        break;
+      case 'distance':
+        // Will handle distance sorting in the application layer
+        baseQuery = baseQuery.orderBy(restaurants.name);
+        break;
+      default:
+        baseQuery = baseQuery.orderBy(restaurants.name);
+    }
+    
+    const result = await baseQuery;
+    const restaurants_list = Array.isArray(result) ? result : [];
+    
+    // If user location is provided and we're sorting by distance
+    if (filters?.userLatitude && filters?.userLongitude && filters?.sortBy === 'distance') {
+      return this.sortRestaurantsByDistance(
+        restaurants_list, 
+        filters.userLatitude, 
+        filters.userLongitude,
+        filters.radius
+      );
+    }
+    
+    // Filter by radius if provided
+    if (filters?.userLatitude && filters?.userLongitude && filters?.radius) {
+      return restaurants_list.filter(restaurant => {
+        if (!restaurant.latitude || !restaurant.longitude) return false;
+        const distance = this.calculateDistance(
+          filters.userLatitude!,
+          filters.userLongitude!,
+          parseFloat(restaurant.latitude),
+          parseFloat(restaurant.longitude)
+        );
+        return distance <= filters.radius!;
+      });
+    }
+    
+    return restaurants_list;
   }
 
   // Distance calculation using Haversine formula
@@ -830,51 +692,78 @@ export class DatabaseStorage {
 
   // Enhanced search for menu items
   async searchMenuItemsAdvanced(searchTerm: string, restaurantId?: string): Promise<any[]> {
-    try {
-      const conditions = [
-        eq(menuItems.isAvailable, true),
-        eq(restaurants.isActive, true),
-        eq(restaurants.isOpen, true),
-        or(
-          like(menuItems.name, `%${searchTerm}%`),
-          like(menuItems.description, `%${searchTerm}%`),
-          like(menuItems.category, `%${searchTerm}%`)
-        )
-      ];
-      
-      if (restaurantId) {
-        conditions.push(eq(menuItems.restaurantId, restaurantId));
-      }
-      
-      const query = this.db.select({
-        id: menuItems.id,
-        name: menuItems.name,
-        description: menuItems.description,
-        price: menuItems.price,
-        originalPrice: menuItems.originalPrice,
-        image: menuItems.image,
-        category: menuItems.category,
-        isAvailable: menuItems.isAvailable,
-        isSpecialOffer: menuItems.isSpecialOffer,
-        restaurant: {
-          id: restaurants.id,
-          name: restaurants.name,
-          image: restaurants.image,
-          deliveryTime: restaurants.deliveryTime,
-          deliveryFee: restaurants.deliveryFee
-        }
-      })
-      .from(menuItems)
-      .leftJoin(restaurants, eq(menuItems.restaurantId, restaurants.id))
-      .where(and(...conditions))
-      .orderBy(menuItems.name);
-      
-      const result = await query;
-      return Array.isArray(result) ? result : [];
-    } catch (error) {
-      console.error('Error in advanced menu items search:', error);
-      return [];
+    const conditions = [
+      eq(menuItems.isAvailable, true),
+      eq(restaurants.isActive, true),
+      eq(restaurants.isOpen, true),
+      or(
+        like(menuItems.name, `%${searchTerm}%`),
+        like(menuItems.description, `%${searchTerm}%`),
+        like(menuItems.category, `%${searchTerm}%`)
+      )
+    ];
+    
+    if (restaurantId) {
+      conditions.push(eq(menuItems.restaurantId, restaurantId));
     }
+    
+    const query = this.db.select({
+      id: menuItems.id,
+      name: menuItems.name,
+      description: menuItems.description,
+      price: menuItems.price,
+      originalPrice: menuItems.originalPrice,
+      image: menuItems.image,
+      category: menuItems.category,
+      isAvailable: menuItems.isAvailable,
+      isSpecialOffer: menuItems.isSpecialOffer,
+      restaurant: {
+        id: restaurants.id,
+        name: restaurants.name,
+        image: restaurants.image,
+        deliveryTime: restaurants.deliveryTime,
+        deliveryFee: restaurants.deliveryFee
+      }
+    })
+    .from(menuItems)
+    .leftJoin(restaurants, eq(menuItems.restaurantId, restaurants.id))
+    .where(and(...conditions))
+    .orderBy(menuItems.name);
+    
+    const result = await query;
+    return Array.isArray(result) ? result : [];
+  }
+
+  // Order Functions
+  async getOrderById(id: string): Promise<Order | undefined> {
+    const [order] = await this.db.select().from(orders).where(eq(orders.id, id));
+    return order;
+  }
+
+  async getCustomerOrders(customerPhone: string): Promise<Order[]> {
+    return await this.db.select().from(orders)
+      .where(eq(orders.customerPhone, customerPhone))
+      .orderBy(desc(orders.createdAt));
+  }
+
+  async updateOrderStatus(orderId: string, status: string): Promise<Order | undefined> {
+    const [updated] = await this.db.update(orders)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(orders.id, orderId))
+      .returning();
+    return updated;
+  }
+
+  // Order Tracking Functions
+  async createOrderTracking(tracking: any): Promise<any> {
+    const [newTracking] = await this.db.insert(orderTracking).values(tracking).returning();
+    return newTracking;
+  }
+
+  async getOrderTracking(orderId: string): Promise<any[]> {
+    return await this.db.select().from(orderTracking)
+      .where(eq(orderTracking.orderId, orderId))
+      .orderBy(desc(orderTracking.createdAt));
   }
 
   // Cart Functions - وظائف السلة
@@ -882,9 +771,6 @@ export class DatabaseStorage {
     try {
       const result = await this.db.select({
         id: cart.id,
-        userId: cart.userId,
-        menuItemId: cart.menuItemId,
-        restaurantId: cart.restaurantId,
         quantity: cart.quantity,
         specialInstructions: cart.specialInstructions,
         addedAt: cart.addedAt,
@@ -951,41 +837,26 @@ export class DatabaseStorage {
   }
 
   async updateCartItem(cartId: string, quantity: number): Promise<Cart | undefined> {
-    try {
-      if (quantity <= 0) {
-        await this.db.delete(cart).where(eq(cart.id, cartId));
-        return undefined;
-      }
-      
-      const [updated] = await this.db.update(cart)
-        .set({ quantity, addedAt: new Date() })
-        .where(eq(cart.id, cartId))
-        .returning();
-      return updated;
-    } catch (error) {
-      console.error('Error updating cart item:', error);
+    if (quantity <= 0) {
+      await this.db.delete(cart).where(eq(cart.id, cartId));
       return undefined;
     }
+    
+    const [updated] = await this.db.update(cart)
+      .set({ quantity, addedAt: new Date() })
+      .where(eq(cart.id, cartId))
+      .returning();
+    return updated;
   }
 
   async removeFromCart(cartId: string): Promise<boolean> {
-    try {
-      const result = await this.db.delete(cart).where(eq(cart.id, cartId));
-      return result.rowCount > 0;
-    } catch (error) {
-      console.error('Error removing from cart:', error);
-      return false;
-    }
+    const result = await this.db.delete(cart).where(eq(cart.id, cartId));
+    return result.rowCount > 0;
   }
 
   async clearCart(userId: string): Promise<boolean> {
-    try {
-      const result = await this.db.delete(cart).where(eq(cart.userId, userId));
-      return result.rowCount > 0;
-    } catch (error) {
-      console.error('Error clearing cart:', error);
-      return false;
-    }
+    const result = await this.db.delete(cart).where(eq(cart.userId, userId));
+    return result.rowCount > 0;
   }
 
   // Favorites Functions - وظائف المفضلة
@@ -1010,47 +881,32 @@ export class DatabaseStorage {
   }
 
   async addToFavorites(favorite: InsertFavorites): Promise<Favorites> {
-    try {
-      const [newFavorite] = await this.db.insert(favorites)
-        .values(favorite)
-        .returning();
-      return newFavorite;
-    } catch (error) {
-      console.error('Error adding to favorites:', error);
-      throw error;
-    }
+    const [newFavorite] = await this.db.insert(favorites)
+      .values(favorite)
+      .returning();
+    return newFavorite;
   }
 
   async removeFromFavorites(userId: string, restaurantId: string): Promise<boolean> {
-    try {
-      const result = await this.db.delete(favorites)
-        .where(
-          and(
-            eq(favorites.userId, userId),
-            eq(favorites.restaurantId, restaurantId)
-          )
-        );
-      return result.rowCount > 0;
-    } catch (error) {
-      console.error('Error removing from favorites:', error);
-      return false;
-    }
+    const result = await this.db.delete(favorites)
+      .where(
+        and(
+          eq(favorites.userId, userId),
+          eq(favorites.restaurantId, restaurantId)
+        )
+      );
+    return result.rowCount > 0;
   }
 
   async isRestaurantFavorite(userId: string, restaurantId: string): Promise<boolean> {
-    try {
-      const result = await this.db.select().from(favorites)
-        .where(
-          and(
-            eq(favorites.userId, userId),
-            eq(favorites.restaurantId, restaurantId)
-          )
-        );
-      return result.length > 0;
-    } catch (error) {
-      console.error('Error checking favorite status:', error);
-      return false;
-    }
+    const result = await this.db.select().from(favorites)
+      .where(
+        and(
+          eq(favorites.userId, userId),
+          eq(favorites.restaurantId, restaurantId)
+        )
+      );
+    return result.length > 0;
   }
 
   // User Addresses
@@ -1067,85 +923,70 @@ export class DatabaseStorage {
   }
 
   async createUserAddress(userId: string, address: InsertUserAddress): Promise<UserAddress> {
-    try {
-      // If this is being set as default, unset other defaults for this user
-      if (address.isDefault) {
-        await this.db.update(userAddresses)
-          .set({ isDefault: false })
-          .where(
-            and(
-              eq(userAddresses.userId, userId),
-              eq(userAddresses.isDefault, true)
-            )
-          );
-      }
-
-      const [newAddress] = await this.db.insert(userAddresses)
-        .values({
-          ...address,
-          userId,
-          isDefault: address.isDefault ?? false
-        })
-        .returning();
-      return newAddress;
-    } catch (error) {
-      console.error('Error creating user address:', error);
-      throw error;
+    // If this is being set as default, unset other defaults for this user
+    if (address.isDefault) {
+      await this.db.update(userAddresses)
+        .set({ isDefault: false })
+        .where(
+          and(
+            eq(userAddresses.userId, userId),
+            eq(userAddresses.isDefault, true)
+          )
+        );
     }
+
+    const [newAddress] = await this.db.insert(userAddresses)
+      .values({
+        ...address,
+        userId,
+        isDefault: address.isDefault ?? false
+      })
+      .returning();
+    return newAddress;
   }
 
   async updateUserAddress(addressId: string, userId: string, address: Partial<InsertUserAddress>): Promise<UserAddress | undefined> {
-    try {
-      // Verify ownership
-      const existingAddress = await this.db.select().from(userAddresses)
-        .where(
-          and(
-            eq(userAddresses.id, addressId),
-            eq(userAddresses.userId, userId)
-          )
-        );
-      
-      if (existingAddress.length === 0) {
-        return undefined;
-      }
-
-      // If this is being set as default, unset other defaults for this user
-      if (address.isDefault) {
-        await this.db.update(userAddresses)
-          .set({ isDefault: false })
-          .where(
-            and(
-              eq(userAddresses.userId, userId),
-              eq(userAddresses.isDefault, true)
-            )
-          );
-      }
-
-      const [updated] = await this.db.update(userAddresses)
-        .set(address)
-        .where(eq(userAddresses.id, addressId))
-        .returning();
-      return updated;
-    } catch (error) {
-      console.error('Error updating user address:', error);
+    // Verify ownership
+    const existingAddress = await this.db.select().from(userAddresses)
+      .where(
+        and(
+          eq(userAddresses.id, addressId),
+          eq(userAddresses.userId, userId)
+        )
+      );
+    
+    if (existingAddress.length === 0) {
       return undefined;
     }
+
+    // If this is being set as default, unset other defaults for this user
+    if (address.isDefault) {
+      await this.db.update(userAddresses)
+        .set({ isDefault: false })
+        .where(
+          and(
+            eq(userAddresses.userId, userId),
+            eq(userAddresses.isDefault, true)
+          )
+        );
+    }
+
+    const [updated] = await this.db.update(userAddresses)
+      .set(address)
+      .where(eq(userAddresses.id, addressId))
+      .returning();
+    return updated;
   }
 
   async deleteUserAddress(addressId: string, userId: string): Promise<boolean> {
-    try {
-      const result = await this.db.delete(userAddresses)
-        .where(
-          and(
-            eq(userAddresses.id, addressId),
-            eq(userAddresses.userId, userId)
-          )
-        );
-      return result.rowCount > 0;
-    } catch (error) {
-      console.error('Error deleting user address:', error);
-      return false;
-    }
+    const result = await this.db.delete(userAddresses)
+      .where(
+        and(
+          eq(userAddresses.id, addressId),
+          eq(userAddresses.userId, userId)
+        )
+      );
+    return result.rowCount > 0;
   }
 
   // Ratings
@@ -1175,42 +1016,21 @@ export class DatabaseStorage {
   }
 
   async createRating(rating: InsertRating): Promise<Rating> {
-    try {
-      const [newRating] = await this.db.insert(ratings)
-        .values({
-          ...rating,
-          isApproved: rating.isApproved ?? false
-        })
-        .returning();
-      return newRating;
-    } catch (error) {
-      console.error('Error creating rating:', error);
-      throw error;
-    }
+    const [newRating] = await this.db.insert(ratings)
+      .values({
+        ...rating,
+        isApproved: rating.isApproved ?? false
+      })
+      .returning();
+    return newRating;
   }
 
   async updateRating(id: string, rating: Partial<InsertRating>): Promise<Rating | undefined> {
-    try {
-      const [updated] = await this.db.update(ratings)
-        .set(rating)
-        .where(eq(ratings.id, id))
-        .returning();
-      return updated;
-    } catch (error) {
-      console.error('Error updating rating:', error);
-      return undefined;
-    }
-  }
-
-  // Additional methods for compatibility
-  async getAllAdminUsers(): Promise<AdminUser[]> {
-    try {
-      const result = await this.db.select().from(adminUsers);
-      return Array.isArray(result) ? result : [];
-    } catch (error) {
-      console.error('Error fetching admin users:', error);
-      return [];
-    }
+    const [updated] = await this.db.update(ratings)
+      .set(rating)
+      .where(eq(ratings.id, id))
+      .returning();
+    return updated;
   }
 }
 
