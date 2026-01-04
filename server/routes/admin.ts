@@ -703,7 +703,7 @@ router.get("/reports/restaurants/:id", async (req, res) => {
     console.error("خطأ في جلب السائقين:", error);
     res.status(500).json({ error: "خطأ في الخادم" });
   }
-;
+};
 
 router.post("/drivers", async (req, res) => {
   try {
