@@ -631,7 +631,7 @@ router.get("/reports/restaurants", async (req, res) => {
   }
 });
 
-// جلب تقرير تفصيلي لمطعم محدد
+// ... بعد السطر 605 في ملف admin.ts ...
 router.get("/reports/restaurants/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -689,21 +689,7 @@ router.get("/reports/restaurants/:id", async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: "Internal server error" });
   }
-});
-  try {
-    const drivers = await dbStorage.getDrivers();
-    
-    // ترتيب السائقين حسب تاريخ الإنشاء (الأحدث أولاً)
-    const sortedDrivers = drivers.sort((a, b) => 
-      b.createdAt.getTime() - a.createdAt.getTime()
-    );
-    
-    res.json(sortedDrivers);
-  } catch (error) {
-    console.error("خطأ في جلب السائقين:", error);
-    res.status(500).json({ error: "خطأ في الخادم" });
-  
-};
+}); // <-- قوس الإغلاق الصحيح
 
 router.post("/drivers", async (req, res) => {
   try {
