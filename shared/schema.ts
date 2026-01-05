@@ -307,9 +307,24 @@ export const restaurantEarnings = pgTable("restaurant_earnings", {
   totalEarnings: decimal("total_earnings", { precision: 10, scale: 2 }).default("0.00"),
   pendingAmount: decimal("pending_amount", { precision: 10, scale: 2 }).default("0.00"),
   paidAmount: decimal("paid_amount", { precision: 10, scale: 2 }).default("0.00"),
+  commissionRate: decimal("commission_rate", { precision: 5, scale: 2 }).default("10.00"), // New: Default 10%
   isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Financial Transactions (for detailed statements)
+export const financialTransactions = pgTable("financial_transactions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  restaurantId: uuid("restaurant_id").references(() => restaurants.id),
+  orderId: uuid("order_id").references(() => orders.id),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  commission: decimal("commission", { precision: 10, scale: 2 }).notNull(),
+  netAmount: decimal("net_amount", { precision: 10, scale: 2 }).notNull(),
+  deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).default("0.00"),
+  tax: decimal("tax", { precision: 10, scale: 2 }).default("0.00"),
+  status: varchar("status", { length: 50 }).default("pending"), // pending, paid, overdue
+  transactionDate: timestamp("transaction_date").defaultNow(),
 });
 
 // Cart table - جدول السلة
