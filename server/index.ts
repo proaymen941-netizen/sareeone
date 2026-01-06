@@ -60,12 +60,10 @@ app.use((req, res, next) => {
     });
 
     // Seed database with default data if using DatabaseStorage
-    /* 
     if (storage.constructor.name === 'DatabaseStorage') {
       log('🌱 Seeding database with default data...');
       await seedDefaultData();
     }
-    */
 
     if (app.get("env") === "development") {
       await setupVite(app, server);
