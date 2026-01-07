@@ -8,6 +8,7 @@ import { customerRoutes } from "./routes/customer";
 import driverRoutes from "./routes/driver";
 import ordersRoutes from "./routes/orders";
 import { adminRoutes } from "./routes/admin";
+import { registerAdvancedRoutes } from "./routes/advanced";
 import { 
   insertRestaurantSchema, 
   insertMenuItemSchema, 
@@ -194,8 +195,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Orders routes are now handled by the dedicated orders router
   // app.post("/api/orders", ...) - moved to routes/orders.ts
+
+  // Register advanced routes
+  registerAdvancedRoutes(app);
 
   app.put("/api/orders/:id", async (req, res) => {
     try {
