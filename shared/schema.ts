@@ -96,7 +96,6 @@ export const drivers = pgTable("drivers", {
   isActive: boolean("is_active").default(true).notNull(),
   currentLocation: varchar("current_location", { length: 200 }),
   earnings: decimal("earnings", { precision: 10, scale: 2 }).default("0"),
-  commissionRate: decimal("commission_rate", { precision: 5, scale: 2 }).default("10.00"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -131,42 +130,13 @@ export const orders = pgTable("orders", {
 export const specialOffers = pgTable("special_offers", {
   id: uuid("id").primaryKey().defaultRandom(),
   title: varchar("title", { length: 200 }).notNull(),
-  description: text("description").notNull(),
-  image: text("image").notNull(),
+  description: text("description").notNull(), // تم تغيير إلى notNull
+  image: text("image").notNull(), // تمت الإضافة
   discountPercent: integer("discount_percent"),
   discountAmount: decimal("discount_amount", { precision: 10, scale: 2 }),
   minimumOrder: decimal("minimum_order", { precision: 10, scale: 2 }).default("0"),
   validUntil: timestamp("valid_until"),
   isActive: boolean("is_active").default(true).notNull(),
-  restaurantId: uuid("restaurant_id").references(() => restaurants.id), // Added restaurant linking
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-// Delivery distance fees - For dynamic delivery calculation
-export const deliveryDistanceFees = pgTable("delivery_distance_fees", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  minDistance: decimal("min_distance", { precision: 10, scale: 2 }).notNull(), // in km
-  maxDistance: decimal("max_distance", { precision: 10, scale: 2 }).notNull(), // in km
-  fee: decimal("fee", { precision: 10, scale: 2 }).notNull(),
-  isActive: boolean("is_active").default(true).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-// Cart and Cart Items
-export const carts = pgTable("carts", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  customerId: uuid("customer_id").references(() => users.id).unique(),
-  restaurantId: uuid("restaurant_id").references(() => restaurants.id),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-export const cartItems = pgTable("cart_items", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  cartId: uuid("cart_id").references(() => carts.id).notNull(),
-  menuItemId: uuid("menu_item_id").references(() => menuItems.id).notNull(),
-  quantity: integer("quantity").notNull().default(1),
-  notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -427,161 +397,3 @@ export const insertFavoritesSchema = createInsertSchema(favorites);
 export const selectFavoritesSchema = createSelectSchema(favorites);
 export type Favorites = z.infer<typeof selectFavoritesSchema>;
 export type InsertFavorites = z.infer<typeof insertFavoritesSchema>;
-
-// Driver Reviews table - تقييمات السائقين من العملاء
-export const driverReviews = pgTable("driver_reviews", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  driverId: uuid("driver_id").references(() => drivers.id).notNull(),
-  orderId: uuid("order_id").references(() => orders.id).notNull(),
-  customerId: uuid("customer_id").references(() => users.id),
-  rating: integer("rating").notNull(),
-  comment: text("comment"),
-  deliveryTime: integer("delivery_time"),
-  isApproved: boolean("is_approved").default(false).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-// Driver Earnings table
-export const driverEarnings = pgTable("driver_earnings", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  driverId: uuid("driver_id").references(() => drivers.id).notNull(),
-  totalEarnings: decimal("total_earnings", { precision: 10, scale: 2 }).default("0.00"),
-  todayEarnings: decimal("today_earnings", { precision: 10, scale: 2 }).default("0.00"),
-  weekEarnings: decimal("week_earnings", { precision: 10, scale: 2 }).default("0.00"),
-  monthEarnings: decimal("month_earnings", { precision: 10, scale: 2 }).default("0.00"),
-  totalDeliveries: integer("total_deliveries").default(0),
-  todayDeliveries: integer("today_deliveries").default(0),
-  averageRating: decimal("average_rating", { precision: 3, scale: 2 }).default("0.00"),
-  totalReviews: integer("total_reviews").default(0),
-  isAvailable: boolean("is_available").default(false).notNull(),
-  lastUpdate: timestamp("last_update").defaultNow().notNull(),
-});
-
-// Driver Wallets table
-export const driverWallets = pgTable("driver_wallets", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  driverId: uuid("driver_id").references(() => drivers.id).notNull().unique(),
-  balance: decimal("balance", { precision: 10, scale: 2 }).default("0.00"),
-  totalEarned: decimal("total_earned", { precision: 10, scale: 2 }).default("0.00"),
-  totalWithdrawn: decimal("total_withdrawn", { precision: 10, scale: 2 }).default("0.00"),
-  isActive: boolean("is_active").default(true).notNull(),
-  lastTransactionDate: timestamp("last_transaction_date"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-// Restaurant Wallets table
-export const restaurantWallets = pgTable("restaurant_wallets", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  restaurantId: uuid("restaurant_id").references(() => restaurants.id).notNull().unique(),
-  balance: decimal("balance", { precision: 10, scale: 2 }).default("0.00"),
-  totalEarned: decimal("total_earned", { precision: 10, scale: 2 }).default("0.00"),
-  totalWithdrawn: decimal("total_withdrawn", { precision: 10, scale: 2 }).default("0.00"),
-  totalCommission: decimal("total_commission", { precision: 10, scale: 2 }).default("0.00"),
-  isActive: boolean("is_active").default(true).notNull(),
-  lastTransactionDate: timestamp("last_transaction_date"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-// Commission Settings table
-export const commissionSettings = pgTable("commission_settings", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  type: varchar("type", { length: 50 }).notNull(),
-  entityId: uuid("entity_id"),
-  commissionPercent: decimal("commission_percent", { precision: 5, scale: 2 }).notNull(),
-  minAmount: decimal("min_amount", { precision: 10, scale: 2 }).default("0"),
-  maxAmount: decimal("max_amount", { precision: 10, scale: 2 }),
-  description: text("description"),
-  isActive: boolean("is_active").default(true).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-// Withdrawal Requests table
-export const withdrawalRequests = pgTable("withdrawal_requests", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  entityType: varchar("entity_type", { length: 50 }).notNull(),
-  entityId: uuid("entity_id").notNull(),
-  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
-  accountNumber: varchar("account_number", { length: 50 }).notNull(),
-  bankName: varchar("bank_name", { length: 100 }),
-  accountHolder: varchar("account_holder", { length: 100 }).notNull(),
-  status: varchar("status", { length: 50 }).default("pending").notNull(),
-  rejectionReason: text("rejection_reason"),
-  transferDate: timestamp("transfer_date"),
-  notes: text("notes"),
-  requestedBy: varchar("requested_by", { length: 20 }).notNull(),
-  approvedBy: uuid("approved_by"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-// Audit Logs table
-export const auditLogs = pgTable("audit_logs", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  action: varchar("action", { length: 100 }).notNull(),
-  entityType: varchar("entity_type", { length: 50 }).notNull(),
-  entityId: uuid("entity_id"),
-  userId: uuid("user_id"),
-  userType: varchar("user_type", { length: 50 }).notNull(),
-  description: text("description"),
-  changes: text("changes"),
-  ipAddress: varchar("ip_address", { length: 50 }),
-  userAgent: text("user_agent"),
-  status: varchar("status", { length: 20 }).default("success").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-// Driver Work Sessions table
-export const driverWorkSessions = pgTable("driver_work_sessions", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  driverId: uuid("driver_id").references(() => drivers.id).notNull(),
-  startTime: timestamp("start_time").notNull(),
-  endTime: timestamp("end_time"),
-  totalDeliveries: integer("total_deliveries").default(0),
-  totalEarnings: decimal("total_earnings", { precision: 10, scale: 2 }).default("0.00"),
-  isActive: boolean("is_active").default(true).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-// Zod schemas for new tables
-export const insertDriverReviewSchema = createInsertSchema(driverReviews);
-export const selectDriverReviewSchema = createSelectSchema(driverReviews);
-export type DriverReview = z.infer<typeof selectDriverReviewSchema>;
-export type InsertDriverReview = z.infer<typeof insertDriverReviewSchema>;
-
-export const insertDriverEarningsSchema = createInsertSchema(driverEarnings);
-export const selectDriverEarningsSchema = createSelectSchema(driverEarnings);
-export type DriverEarnings = z.infer<typeof selectDriverEarningsSchema>;
-export type InsertDriverEarnings = z.infer<typeof insertDriverEarningsSchema>;
-
-export const insertDriverWalletSchema = createInsertSchema(driverWallets);
-export const selectDriverWalletSchema = createSelectSchema(driverWallets);
-export type DriverWallet = z.infer<typeof selectDriverWalletSchema>;
-export type InsertDriverWallet = z.infer<typeof insertDriverWalletSchema>;
-
-export const insertRestaurantWalletSchema = createInsertSchema(restaurantWallets);
-export const selectRestaurantWalletSchema = createSelectSchema(restaurantWallets);
-export type RestaurantWallet = z.infer<typeof selectRestaurantWalletSchema>;
-export type InsertRestaurantWallet = z.infer<typeof insertRestaurantWalletSchema>;
-
-export const insertCommissionSettingsSchema = createInsertSchema(commissionSettings);
-export const selectCommissionSettingsSchema = createSelectSchema(commissionSettings);
-export type CommissionSettings = z.infer<typeof selectCommissionSettingsSchema>;
-export type InsertCommissionSettings = z.infer<typeof insertCommissionSettingsSchema>;
-
-export const insertWithdrawalRequestSchema = createInsertSchema(withdrawalRequests);
-export const selectWithdrawalRequestSchema = createSelectSchema(withdrawalRequests);
-export type WithdrawalRequest = z.infer<typeof selectWithdrawalRequestSchema>;
-export type InsertWithdrawalRequest = z.infer<typeof insertWithdrawalRequestSchema>;
-
-export const insertAuditLogSchema = createInsertSchema(auditLogs);
-export const selectAuditLogSchema = createSelectSchema(auditLogs);
-export type AuditLog = z.infer<typeof selectAuditLogSchema>;
-export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
-
-export const insertDriverWorkSessionSchema = createInsertSchema(driverWorkSessions);
-export const selectDriverWorkSessionSchema = createSelectSchema(driverWorkSessions);
-export type DriverWorkSession = z.infer<typeof selectDriverWorkSessionSchema>;
-export type InsertDriverWorkSession = z.infer<typeof insertDriverWorkSessionSchema>;

@@ -61,10 +61,7 @@ function getDb() {
       drivers,
       orderTracking,
       cart,
-      favorites,
-      deliveryDistanceFees,
-      carts,
-      cartItems
+      favorites
     };
     
     db = drizzle(sqlClient, { schema });
@@ -309,35 +306,14 @@ export class DatabaseStorage {
   }
 
   // Special Offers
-  async getSpecialOffers(restaurantId?: string): Promise<SpecialOffer[]> {
-    try {
-      let query = this.db.select().from(specialOffers);
-      if (restaurantId) {
-        query = query.where(eq(specialOffers.restaurantId, restaurantId));
-      }
-      const result = await query.orderBy(desc(specialOffers.createdAt));
-      return Array.isArray(result) ? result : [];
-    } catch (error) {
-      console.error('Error fetching special offers:', error);
-      return [];
-    }
+  async getSpecialOffers(): Promise<SpecialOffer[]> {
+    const result = await this.db.select().from(specialOffers);
+    return Array.isArray(result) ? result : [];
   }
 
-  async getActiveSpecialOffers(restaurantId?: string): Promise<SpecialOffer[]> {
-    try {
-      const conditions = [eq(specialOffers.isActive, true)];
-      if (restaurantId) {
-        conditions.push(eq(specialOffers.restaurantId, restaurantId));
-      }
-      
-      const result = await this.db.select().from(specialOffers)
-        .where(and(...conditions))
-        .orderBy(desc(specialOffers.createdAt));
-      return Array.isArray(result) ? result : [];
-    } catch (error) {
-      console.error('Error fetching active special offers:', error);
-      return [];
-    }
+  async getActiveSpecialOffers(): Promise<SpecialOffer[]> {
+    const result = await this.db.select().from(specialOffers).where(eq(specialOffers.isActive, true));
+    return Array.isArray(result) ? result : [];
   }
 
   async createSpecialOffer(offer: InsertSpecialOffer): Promise<SpecialOffer> {
@@ -1087,70 +1063,6 @@ async getNotifications(recipientType?: string, recipientId?: string, unread?: bo
       .where(eq(ratings.id, id))
       .returning();
     return updated;
-  }
-
-  // Delivery Distance Fee Methods
-  async getDeliveryDistanceFees(): Promise<any[]> {
-    return await this.db.select().from(deliveryDistanceFees).where(eq(deliveryDistanceFees.isActive, true)).orderBy(asc(deliveryDistanceFees.minDistance));
-  }
-
-  async createDeliveryDistanceFee(fee: any) {
-    const [newFee] = await this.db.insert(deliveryDistanceFees).values(fee).returning();
-    return newFee;
-  }
-
-  async calculateDeliveryFee(distance: number): Promise<number> {
-    const fees = await this.db.select().from(deliveryDistanceFees)
-      .where(
-        and(
-          eq(deliveryDistanceFees.isActive, true),
-          sql`${distance} >= ${deliveryDistanceFees.minDistance}`,
-          sql`${distance} < ${deliveryDistanceFees.maxDistance}`
-        )
-      );
-    
-    if (fees.length > 0) {
-      return parseFloat(fees[0].fee);
-    }
-    
-    // Default fee if no specific range found
-    const defaultSettings = await this.getUiSetting('default_delivery_fee');
-    return parseFloat(defaultSettings?.value || "5");
-  }
-
-  // Cart Management
-  async getOrCreateCart(customerId: string) {
-    let [userCart] = await this.db.select().from(carts).where(eq(carts.customerId, customerId));
-    
-    if (!userCart) {
-      [userCart] = await this.db.insert(carts).values({ customerId }).returning();
-    }
-    
-    return userCart;
-  }
-
-  async getCartWithItems(customerId: string) {
-    const userCart = await this.getOrCreateCart(customerId);
-    
-    const items = await this.db.select({
-      id: cartItems.id,
-      quantity: cartItems.quantity,
-      notes: cartItems.notes,
-      menuItem: {
-        id: menuItems.id,
-        name: menuItems.name,
-        price: menuItems.price,
-        image: menuItems.image
-      }
-    })
-    .from(cartItems)
-    .innerJoin(menuItems, eq(cartItems.menuItemId, menuItems.id))
-    .where(eq(cartItems.cartId, userCart.id));
-    
-    return {
-      ...userCart,
-      items
-    };
   }
 }
 

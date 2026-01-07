@@ -120,10 +120,6 @@ const schema = {
 // لوحة المعلومات
 router.get("/dashboard", async (req, res) => {
   try {
-    const { start, end } = req.query;
-    const dateRangeStart = start ? new Date(start as string) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const dateRangeEnd = end ? new Date(end as string) : new Date();
-
     // جلب البيانات من قاعدة البيانات
     const [restaurants, orders, drivers, users] = await Promise.all([
       storage.getRestaurants(),
@@ -158,26 +154,17 @@ router.get("/dashboard", async (req, res) => {
       sum + parseFloat(order.totalAmount || order.total || "0"), 0
     );
     
-    // Calculate growth compared to previous period (same length)
-    const periodLength = dateRangeEnd.getTime() - dateRangeStart.getTime();
-    const prevPeriodStart = new Date(dateRangeStart.getTime() - periodLength);
-    const prevPeriodEnd = new Date(dateRangeStart);
-    
-    const prevPeriodOrders = orders.filter(o => 
-      new Date(o.createdAt) >= prevPeriodStart && new Date(o.createdAt) < prevPeriodEnd
+    const todayDeliveredOrders = deliveredOrders.filter(order => 
+      order.createdAt.toDateString() === today
     );
-    
-    const prevRevenue = prevPeriodOrders
-      .filter(o => o.status === "delivered")
-      .reduce((sum, order) => sum + parseFloat(order.totalAmount || order.total || "0"), 0);
-    
-    const ordersGrowth = prevPeriodOrders.length > 0 
-      ? Math.round(((totalOrders - prevPeriodOrders.length) / prevPeriodOrders.length) * 100)
-      : 0;
-      
-    const revenueGrowth = prevRevenue > 0
-      ? Math.round(((totalRevenue - prevRevenue) / prevRevenue) * 100)
-      : 0;
+    const todayRevenue = todayDeliveredOrders.reduce((sum, order) => 
+      sum + parseFloat(order.totalAmount || order.total || "0"), 0
+    );
+
+    // الطلبات الأخيرة (أحدث 10 طلبات)
+    const recentOrders = orders
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, 10);
 
     res.json({
       stats: {
@@ -189,9 +176,7 @@ router.get("/dashboard", async (req, res) => {
         pendingOrders,
         activeDrivers,
         totalRevenue,
-        todayRevenue,
-        ordersGrowth,
-        revenueGrowth
+        todayRevenue
       },
       recentOrders
     });
@@ -865,9 +850,14 @@ router.get("/drivers/:id/stats", async (req, res) => {
 // إدارة العروض الخاصة
 router.get("/special-offers", async (req, res) => {
   try {
-    const { restaurantId } = req.query;
-    const offers = await dbStorage.getSpecialOffers(restaurantId as string);
-    res.json(offers);
+    const offers = await storage.getSpecialOffers();
+    
+    // ترتيب العروض حسب تاريخ الإنشاء (الأحدث أولاً)
+    const sortedOffers = offers.sort((a, b) => 
+      b.createdAt.getTime() - a.createdAt.getTime()
+    );
+    
+    res.json(sortedOffers);
   } catch (error) {
     console.error("خطأ في جلب العروض الخاصة:", error);
     res.status(500).json({ error: "خطأ في الخادم" });
@@ -895,9 +885,6 @@ router.post("/special-offers", async (req, res) => {
       
       // صلاحية العرض (الآن مع معالجة صحيحة للتاريخ)
       validUntil: coercedData.validUntil,
-      
-      // ربط المطعم
-      restaurantId: coercedData.restaurantId || null,
       
       // حالة العرض (الآن مع تحويل صحيح للبوليان)
       isActive: coercedData.isActive !== undefined ? coercedData.isActive : true,
@@ -1408,35 +1395,6 @@ router.put("/ui-settings/:key", async (req, res) => {
   } catch (error) {
     console.error("خطأ في تحديث إعداد الواجهة:", error);
     res.status(500).json({ error: "خطأ في الخادم" });
-  }
-});
-
-// Delivery Fees Management
-router.get("/delivery-fees", async (req, res) => {
-  try {
-    const fees = await dbStorage.getDeliveryDistanceFees();
-    res.json(fees);
-  } catch (error) {
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-router.post("/delivery-fees", async (req, res) => {
-  try {
-    const newFee = await dbStorage.createDeliveryDistanceFee(req.body);
-    res.json(newFee);
-  } catch (error) {
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// Audit Logs
-router.get("/audit-logs", async (req, res) => {
-  try {
-    const logs = await db.select().from(schema.auditLogs).orderBy(desc(schema.auditLogs.createdAt)).limit(100);
-    res.json(logs);
-  } catch (error) {
-    res.status(500).json({ error: "Internal server error" });
   }
 });
 
