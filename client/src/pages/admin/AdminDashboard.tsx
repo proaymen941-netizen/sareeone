@@ -51,6 +51,9 @@ import {
 import { apiRequest } from '@/lib/queryClient';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { RestaurantReportsModal } from '@/components/RestaurantReportsModal';
+import { DriverManagementPanel } from '@/components/admin/DriverManagementPanel';
+import { RestaurantManagementPanel } from '@/components/admin/RestaurantManagementPanel';
+import AdvancedReports from './AdvancedReports';
 import { formatCurrency, formatDate, calculatePercentage, calculateAverage } from '@/lib/utils';
 
 export default function AdminDashboard() {
@@ -434,7 +437,7 @@ export default function AdminDashboard() {
 
         {/* Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-6 h-auto p-1 bg-gray-100">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-9 h-auto p-1 bg-gray-100">
             <TabsTrigger value="overview" className="py-3 data-[state=active]:bg-white">
               <BarChart3 className="h-4 w-4 ml-2" />
               نظرة عامة
@@ -451,9 +454,21 @@ export default function AdminDashboard() {
               <ChefHat className="h-4 w-4 ml-2" />
               المطاعم
             </TabsTrigger>
+            <TabsTrigger value="restaurant-management" className="py-3 data-[state=active]:bg-white">
+              <DollarSign className="h-4 w-4 ml-2" />
+              إدارة حسابات المطاعم
+            </TabsTrigger>
             <TabsTrigger value="drivers" className="py-3 data-[state=active]:bg-white">
               <Truck className="h-4 w-4 ml-2" />
               السائقين
+            </TabsTrigger>
+            <TabsTrigger value="driver-management" className="py-3 data-[state=active]:bg-white">
+              <Users className="h-4 w-4 ml-2" />
+              إدارة حسابات السائقين
+            </TabsTrigger>
+            <TabsTrigger value="advanced-reports" className="py-3 data-[state=active]:bg-white">
+              <BarChart className="h-4 w-4 ml-2" />
+              التقارير المتقدمة
             </TabsTrigger>
             <TabsTrigger value="analytics" className="py-3 data-[state=active]:bg-white">
               <Activity className="h-4 w-4 ml-2" />
@@ -893,8 +908,61 @@ export default function AdminDashboard() {
             </Card>
           </TabsContent>
 
+          {/* إدارة حسابات المطاعم */}
+          <TabsContent value="restaurant-management">
+            <RestaurantManagementPanel />
+          </TabsContent>
+
+          {/* إدارة حسابات السائقين */}
+          <TabsContent value="driver-management">
+            <DriverManagementPanel />
+          </TabsContent>
+
+          {/* التقارير المتقدمة */}
+          <TabsContent value="advanced-reports">
+            <AdvancedReports />
+          </TabsContent>
+
           {/* باقي التبويبات (Orders, Restaurants, Drivers, Analytics) */}
-          {/* ... سيتم الحفاظ على الهيكل الحالي مع تحسينات الأداء ... */}
+          <TabsContent value="orders">
+            <Card>
+              <CardContent className="py-10 text-center">
+                <Package className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                <h3 className="text-lg font-medium">إدارة الطلبات</h3>
+                <p className="text-gray-500">سيتم ربط هذا القسم بنظام إدارة الطلبات الحالي</p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="restaurants">
+            <Card>
+              <CardContent className="py-10 text-center">
+                <ChefHat className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                <h3 className="text-lg font-medium">إدارة المطاعم</h3>
+                <p className="text-gray-500">سيتم ربط هذا القسم بنظام إدارة المطاعم الحالي</p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="drivers">
+            <Card>
+              <CardContent className="py-10 text-center">
+                <Truck className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                <h3 className="text-lg font-medium">إدارة السائقين</h3>
+                <p className="text-gray-500">سيتم ربط هذا القسم بنظام إدارة السائقين الحالي</p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="analytics">
+            <Card>
+              <CardContent className="py-10 text-center">
+                <Activity className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                <h3 className="text-lg font-medium">التحليلات والإحصائيات</h3>
+                <p className="text-gray-500">سيتم عرض تحليلات متقدمة للأداء هنا</p>
+              </CardContent>
+            </Card>
+          </TabsContent>
           
         </Tabs>
 
