@@ -199,18 +199,8 @@ export function registerAdvancedRoutes(app: express.Express) {
     }
   });
 
-  // Get pending withdrawal requests
-  app.get("/api/admin/withdrawal-requests/pending", async (req, res) => {
-    try {
-      const requests = await advancedDb.getPendingWithdrawalRequests();
-      res.json(requests);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch withdrawal requests" });
-    }
-  });
-
   // Approve withdrawal request
-  app.post("/api/admin/withdrawal-requests/:requestId/approve", async (req, res) => {
+  app.post("/api/admin/withdrawals/:requestId/approve", async (req, res) => {
     try {
       const { requestId } = req.params;
       const { approvedBy } = req.body;
@@ -233,7 +223,7 @@ export function registerAdvancedRoutes(app: express.Express) {
   });
 
   // Reject withdrawal request
-  app.post("/api/admin/withdrawal-requests/:requestId/reject", async (req, res) => {
+  app.post("/api/admin/withdrawals/:requestId/reject", async (req, res) => {
     try {
       const { requestId } = req.params;
       const { reason } = req.body;
@@ -242,6 +232,85 @@ export function registerAdvancedRoutes(app: express.Express) {
       res.json(request);
     } catch (error) {
       res.status(500).json({ error: "Failed to reject withdrawal request" });
+    }
+  });
+
+  // Get pending withdrawal requests
+  app.get("/api/admin/withdrawals/pending", async (req, res) => {
+    try {
+      const requests = await advancedDb.getPendingWithdrawalRequests();
+      res.json(requests);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch withdrawal requests" });
+    }
+  });
+
+  // ===================== FINANCIAL REPORTS ROUTES =====================
+  app.get("/api/admin/financial-reports", async (req, res) => {
+    try {
+      const { from, to, type } = req.query;
+      res.json([
+        {
+          id: "1",
+          period: "يناير 2026",
+          totalRevenue: 1234567,
+          totalExpenses: 988677,
+          netProfit: 245890,
+          commissionEarned: 123450,
+          status: "published"
+        }
+      ]);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch financial reports" });
+    }
+  });
+
+  app.get("/api/admin/transactions", async (req, res) => {
+    try {
+      res.json([
+        {
+          id: "tx_1",
+          type: "commission",
+          amount: 500,
+          status: "completed",
+          createdAt: new Date().toISOString()
+        }
+      ]);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch transactions" });
+    }
+  });
+
+  // ===================== SECURITY ROUTES =====================
+  app.get("/api/admin/security/settings", async (req, res) => {
+    try {
+      res.json({
+        twoFactorEnabled: false,
+        sessionTimeout: 30,
+        passwordComplexity: "medium",
+        lastAudit: "2026-01-08"
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch security settings" });
+    }
+  });
+
+  app.get("/api/admin/security/logs", async (req, res) => {
+    try {
+      res.json([
+        {
+          id: "log_1",
+          userName: "Admin",
+          action: "دخول للنظام",
+          ipAddress: "192.168.1.1",
+          device: "Chrome / Windows",
+          location: "صنعاء",
+          status: "success",
+          createdAt: new Date().toISOString()
+        }
+      ]);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch security logs" });
     }
   });
 

@@ -8,6 +8,7 @@ import { customerRoutes } from "./routes/customer";
 import driverRoutes from "./routes/driver";
 import ordersRoutes from "./routes/orders";
 import { adminRoutes } from "./routes/admin";
+import { registerAdvancedRoutes } from "./routes/advanced";
 import { 
   insertRestaurantSchema, 
   insertMenuItemSchema, 
@@ -36,6 +37,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // تم حذف مسارات المصادقة - تم إزالة نظام المصادقة بالكامل
 
+
+  // Admin and Advanced Routes
+  app.use("/api/admin", adminRoutes);
+  registerAdvancedRoutes(app);
 
   // Users
   app.get("/api/users/:id", async (req, res) => {

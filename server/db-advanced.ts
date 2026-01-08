@@ -1,7 +1,7 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import { 
   driverReviews, driverEarnings, driverWallets, restaurantWallets,
-  commissionSettings, withdrawalRequests, auditLogs, driverWorkSessions,
+  commissionSettings, withdrawalRequests, driverWorkSessions,
   drivers, orders, users,
   type DriverReview, type InsertDriverReview,
   type DriverEarnings, type InsertDriverEarnings,
@@ -9,7 +9,6 @@ import {
   type RestaurantWallet, type InsertRestaurantWallet,
   type CommissionSettings, type InsertCommissionSettings,
   type WithdrawalRequest, type InsertWithdrawalRequest,
-  type AuditLog, type InsertAuditLog,
   type DriverWorkSession, type InsertDriverWorkSession
 } from "@shared/schema";
 import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
@@ -195,45 +194,6 @@ export class AdvancedDatabaseStorage {
       rejectionReason: reason,
       updatedAt: new Date()
     });
-  }
-
-  // Audit Logs
-  async createAuditLog(log: InsertAuditLog): Promise<AuditLog> {
-    const result = await this.db.insert(auditLogs).values(log).returning();
-    return result[0];
-  }
-
-  async getAuditLogs(filters?: {
-    userId?: string;
-    entityType?: string;
-    action?: string;
-    startDate?: Date;
-    endDate?: Date;
-  }): Promise<AuditLog[]> {
-    let query = this.db.select().from(auditLogs);
-    const conditions: any[] = [];
-
-    if (filters?.userId) {
-      conditions.push(eq(auditLogs.userId, filters.userId));
-    }
-    if (filters?.entityType) {
-      conditions.push(eq(auditLogs.entityType, filters.entityType));
-    }
-    if (filters?.action) {
-      conditions.push(eq(auditLogs.action, filters.action));
-    }
-    if (filters?.startDate) {
-      conditions.push(gte(auditLogs.createdAt, filters.startDate));
-    }
-    if (filters?.endDate) {
-      conditions.push(lte(auditLogs.createdAt, filters.endDate));
-    }
-
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-    }
-
-    return await query.orderBy(desc(auditLogs.createdAt));
   }
 
   // Driver Work Sessions

@@ -69,43 +69,11 @@ function getDb() {
   return db;
 }
 
-    // ... rest of the DatabaseStorage class remains the same
+// ... rest of the DatabaseStorage class remains the same
 
 export class DatabaseStorage {
   get db() {
     return getDb();
-  }
-
-  // Restaurant Reporting & Analytics
-  async getRestaurantReports(restaurantId?: string, startDate?: Date, endDate?: Date) {
-    const conditions = [];
-    if (restaurantId) conditions.push(eq(orders.restaurantId, restaurantId));
-    if (startDate) conditions.push(sql`${orders.createdAt} >= ${startDate}`);
-    if (endDate) conditions.push(sql`${orders.createdAt} <= ${endDate}`);
-
-    const allOrders = await this.db.select().from(orders).where(and(...conditions));
-    
-    // Aggregate stats
-    const totalSales = allOrders.reduce((sum, o) => sum + parseFloat(o.totalAmount || "0"), 0);
-    const totalOrders = allOrders.length;
-    const avgOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
-    
-    return {
-      totalSales,
-      totalOrders,
-      avgOrderValue,
-      orders: allOrders
-    };
-  }
-
-  async getFinancialSummary(restaurantId: string) {
-    const earnings = await this.db.select().from(restaurantEarnings).where(eq(restaurantEarnings.restaurantId, restaurantId));
-    const transactions = await this.db.select().from(financialTransactions).where(eq(financialTransactions.restaurantId, restaurantId));
-    
-    return {
-      summary: earnings[0] || null,
-      transactions: transactions
-    };
   }
 
   // Admin Authentication

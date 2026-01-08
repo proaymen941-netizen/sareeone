@@ -1,6 +1,7 @@
 import { pgTable, text, uuid, timestamp, boolean, integer, decimal, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
+import { sql } from "drizzle-orm";
 
 // Users table (customers) - بدون مصادقة
 export const users = pgTable("users", {
@@ -61,7 +62,6 @@ export const restaurants = pgTable("restaurants", {
   workingDays: varchar("working_days", { length: 50 }).default("0,1,2,3,4,5,6"), // تمت الإضافة
   isTemporarilyClosed: boolean("is_temporarily_closed").default(false), // تمت الإضافة
   temporaryCloseReason: text("temporary_close_reason"), // تمت الإضافة
-  // إضافة الحقول الجديدة للموقع والمطاعم الجديدة والمفضلة
   latitude: decimal("latitude", { precision: 10, scale: 8 }),
   longitude: decimal("longitude", { precision: 11, scale: 8 }),
   address: text("address"), // عنوان المطعم
@@ -152,8 +152,6 @@ export const adminUsers = pgTable("admin_users", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// تم حذف جدول admin_sessions - لا حاجة له بعد إزالة نظام المصادقة
-
 // System settings table
 export const systemSettings = pgTable("system_settings", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -168,54 +166,6 @@ export const systemSettings = pgTable("system_settings", {
 
 // UI settings table (alias for system_settings)
 export const uiSettings = systemSettings;
-
-// Zod schemas for validation
-export const insertUserSchema = createInsertSchema(users);
-export const selectUserSchema = createSelectSchema(users);
-export type User = z.infer<typeof selectUserSchema>;
-export type InsertUser = z.infer<typeof insertUserSchema>;
-
-export const insertUserAddressSchema = createInsertSchema(userAddresses);
-export const selectUserAddressSchema = createSelectSchema(userAddresses);
-export type UserAddress = z.infer<typeof selectUserAddressSchema>;
-export type InsertUserAddress = z.infer<typeof insertUserAddressSchema>;
-
-export const insertCategorySchema = createInsertSchema(categories);
-export const selectCategorySchema = createSelectSchema(categories);
-export type Category = z.infer<typeof selectCategorySchema>;
-export type InsertCategory = z.infer<typeof insertCategorySchema>;
-
-export const insertRestaurantSchema = createInsertSchema(restaurants);
-export const selectRestaurantSchema = createSelectSchema(restaurants);
-export type Restaurant = z.infer<typeof selectRestaurantSchema>;
-export type InsertRestaurant = z.infer<typeof insertRestaurantSchema>;
-
-export const insertMenuItemSchema = createInsertSchema(menuItems);
-export const selectMenuItemSchema = createSelectSchema(menuItems);
-export type MenuItem = z.infer<typeof selectMenuItemSchema>;
-export type InsertMenuItem = z.infer<typeof insertMenuItemSchema>;
-
-export const insertOrderSchema = createInsertSchema(orders);
-export const selectOrderSchema = createSelectSchema(orders);
-export type Order = z.infer<typeof selectOrderSchema>;
-export type InsertOrder = z.infer<typeof insertOrderSchema>;
-
-export const insertDriverSchema = createInsertSchema(drivers);
-export const selectDriverSchema = createSelectSchema(drivers);
-export type Driver = z.infer<typeof selectDriverSchema>;
-export type InsertDriver = z.infer<typeof insertDriverSchema>;
-
-export const insertSpecialOfferSchema = createInsertSchema(specialOffers);
-export const selectSpecialOfferSchema = createSelectSchema(specialOffers);
-export type SpecialOffer = z.infer<typeof selectSpecialOfferSchema>;
-export type InsertSpecialOffer = z.infer<typeof insertSpecialOfferSchema>;
-
-export const insertAdminUserSchema = createInsertSchema(adminUsers);
-export const selectAdminUserSchema = createSelectSchema(adminUsers);
-export type AdminUser = z.infer<typeof selectAdminUserSchema>;
-export type InsertAdminUser = z.infer<typeof insertAdminUserSchema>;
-
-// تم حذف AdminSession schemas - لا حاجة لها بعد إزالة نظام المصادقة
 
 // Restaurant sections table
 export const restaurantSections = pgTable("restaurant_sections", {
@@ -287,7 +237,7 @@ export const walletTransactions = pgTable("wallet_transactions", {
 });
 
 // System settings table (removed duplicate)
-export const systemSettingsTable = pgTable("system_settings", {
+export const systemSettingsTable = pgTable("system_settings_table", {
   id: uuid("id").primaryKey().defaultRandom(),
   key: varchar("key", { length: 100 }).unique().notNull(),
   value: text("value").notNull(),
@@ -307,24 +257,9 @@ export const restaurantEarnings = pgTable("restaurant_earnings", {
   totalEarnings: decimal("total_earnings", { precision: 10, scale: 2 }).default("0.00"),
   pendingAmount: decimal("pending_amount", { precision: 10, scale: 2 }).default("0.00"),
   paidAmount: decimal("paid_amount", { precision: 10, scale: 2 }).default("0.00"),
-  commissionRate: decimal("commission_rate", { precision: 5, scale: 2 }).default("10.00"), // New: Default 10%
   isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-// Financial Transactions (for detailed statements)
-export const financialTransactions = pgTable("financial_transactions", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  restaurantId: uuid("restaurant_id").references(() => restaurants.id),
-  orderId: uuid("order_id").references(() => orders.id),
-  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
-  commission: decimal("commission", { precision: 10, scale: 2 }).notNull(),
-  netAmount: decimal("net_amount", { precision: 10, scale: 2 }).notNull(),
-  deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).default("0.00"),
-  tax: decimal("tax", { precision: 10, scale: 2 }).default("0.00"),
-  status: varchar("status", { length: 50 }).default("pending"), // pending, paid, overdue
-  transactionDate: timestamp("transaction_date").defaultNow(),
 });
 
 // Cart table - جدول السلة
@@ -345,6 +280,126 @@ export const favorites = pgTable("favorites", {
   restaurantId: uuid("restaurant_id").references(() => restaurants.id).notNull(),
   addedAt: timestamp("added_at").defaultNow().notNull(),
 });
+
+// New tables for Advanced Features
+export const driverReviews = pgTable("driver_reviews", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  driverId: uuid("driver_id").references(() => drivers.id).notNull(),
+  orderId: uuid("order_id").references(() => orders.id).notNull(),
+  rating: integer("rating").notNull(),
+  comment: text("comment"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const driverEarningsTable = pgTable("driver_earnings_table", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  driverId: uuid("driver_id").references(() => drivers.id).notNull(),
+  totalEarned: decimal("total_earned", { precision: 10, scale: 2 }).default("0"),
+  withdrawn: decimal("withdrawn", { precision: 10, scale: 2 }).default("0"),
+  pending: decimal("pending", { precision: 10, scale: 2 }).default("0"),
+  lastPaidAt: timestamp("last_paid_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const driverWallets = pgTable("driver_wallets", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  driverId: uuid("driver_id").references(() => drivers.id).notNull().unique(),
+  balance: decimal("balance", { precision: 10, scale: 2 }).default("0"),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const restaurantWallets = pgTable("restaurant_wallets", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  restaurantId: uuid("restaurant_id").references(() => restaurants.id).notNull().unique(),
+  balance: decimal("balance", { precision: 10, scale: 2 }).default("0"),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const commissionSettings = pgTable("commission_settings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  type: varchar("type", { length: 50 }).notNull(), // default, restaurant, driver
+  entityId: uuid("entity_id"), // null if default
+  commissionPercent: decimal("commission_percent", { precision: 5, scale: 2 }).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const withdrawalRequests = pgTable("withdrawal_requests", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  entityType: varchar("entity_type", { length: 50 }).notNull(), // driver, restaurant
+  entityId: uuid("entity_id").notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  status: varchar("status", { length: 50 }).default("pending").notNull(), // pending, approved, rejected, completed
+  bankDetails: text("bank_details"),
+  adminNotes: text("admin_notes"),
+  rejectionReason: text("rejection_reason"),
+  approvedBy: uuid("approved_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const driverWorkSessions = pgTable("driver_work_sessions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  driverId: uuid("driver_id").references(() => drivers.id).notNull(),
+  startTime: timestamp("start_time").defaultNow().notNull(),
+  endTime: timestamp("end_time"),
+  isActive: boolean("is_active").default(true).notNull(),
+  totalDeliveries: integer("total_deliveries").default(0),
+  totalEarnings: decimal("total_earnings", { precision: 10, scale: 2 }).default("0"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Zod schemas for validation
+export const insertUserSchema = createInsertSchema(users);
+export const selectUserSchema = createSelectSchema(users);
+export type User = z.infer<typeof selectUserSchema>;
+export type InsertUser = z.infer<typeof insertUserSchema>;
+
+export const insertUserAddressSchema = createInsertSchema(userAddresses);
+export const selectUserAddressSchema = createSelectSchema(userAddresses);
+export type UserAddress = z.infer<typeof selectUserAddressSchema>;
+export type InsertUserAddress = z.infer<typeof insertUserAddressSchema>;
+
+export const insertCategorySchema = createInsertSchema(categories);
+export const selectCategorySchema = createSelectSchema(categories);
+export type Category = z.infer<typeof selectCategorySchema>;
+export type InsertCategory = z.infer<typeof insertCategorySchema>;
+
+export const insertRestaurantSchema = createInsertSchema(restaurants);
+export const selectRestaurantSchema = createSelectSchema(restaurants);
+export type Restaurant = z.infer<typeof selectRestaurantSchema>;
+export type InsertRestaurant = z.infer<typeof insertRestaurantSchema>;
+
+export const insertMenuItemSchema = createInsertSchema(menuItems);
+export const selectMenuItemSchema = createSelectSchema(menuItems);
+export type MenuItem = z.infer<typeof selectMenuItemSchema>;
+export type InsertMenuItem = z.infer<typeof insertMenuItemSchema>;
+
+export const insertOrderSchema = createInsertSchema(orders);
+export const selectOrderSchema = createSelectSchema(orders);
+export type Order = z.infer<typeof selectOrderSchema>;
+export type InsertOrder = z.infer<typeof insertOrderSchema>;
+
+export const insertDriverSchema = createInsertSchema(drivers);
+export const selectDriverSchema = createSelectSchema(drivers);
+export type Driver = z.infer<typeof selectDriverSchema>;
+export type InsertDriver = z.infer<typeof insertDriverSchema>;
+
+export const insertSpecialOfferSchema = createInsertSchema(specialOffers);
+export const selectSpecialOfferSchema = createSelectSchema(specialOffers);
+export type SpecialOffer = z.infer<typeof selectSpecialOfferSchema>;
+export type InsertSpecialOffer = z.infer<typeof insertSpecialOfferSchema>;
+
+export const insertAdminUserSchema = createInsertSchema(adminUsers);
+export const selectAdminUserSchema = createSelectSchema(adminUsers);
+export type AdminUser = z.infer<typeof selectAdminUserSchema>;
+export type InsertAdminUser = z.infer<typeof insertAdminUserSchema>;
 
 export const insertUiSettingsSchema = createInsertSchema(uiSettings);
 export const selectUiSettingsSchema = createSelectSchema(uiSettings);
@@ -386,14 +441,51 @@ export const selectRestaurantEarningsSchema = createSelectSchema(restaurantEarni
 export type RestaurantEarnings = z.infer<typeof selectRestaurantEarningsSchema>;
 export type InsertRestaurantEarnings = z.infer<typeof insertRestaurantEarningsSchema>;
 
-// Cart schemas - مخططات السلة
 export const insertCartSchema = createInsertSchema(cart);
 export const selectCartSchema = createSelectSchema(cart);
 export type Cart = z.infer<typeof selectCartSchema>;
 export type InsertCart = z.infer<typeof insertCartSchema>;
 
-// Favorites schemas - مخططات المفضلة
 export const insertFavoritesSchema = createInsertSchema(favorites);
 export const selectFavoritesSchema = createSelectSchema(favorites);
 export type Favorites = z.infer<typeof selectFavoritesSchema>;
 export type InsertFavorites = z.infer<typeof insertFavoritesSchema>;
+
+// New schemas for Advanced Features
+export const insertDriverReviewSchema = createInsertSchema(driverReviews);
+export const selectDriverReviewSchema = createSelectSchema(driverReviews);
+export type DriverReview = z.infer<typeof selectDriverReviewSchema>;
+export type InsertDriverReview = z.infer<typeof insertDriverReviewSchema>;
+
+export const insertDriverEarningsSchema = createInsertSchema(driverEarningsTable);
+export const selectDriverEarningsSchema = createSelectSchema(driverEarningsTable);
+export type DriverEarnings = z.infer<typeof selectDriverEarningsSchema>;
+export type InsertDriverEarnings = z.infer<typeof insertDriverEarningsSchema>;
+
+export const insertDriverWalletSchema = createInsertSchema(driverWallets);
+export const selectDriverWalletSchema = createSelectSchema(driverWallets);
+export type DriverWallet = z.infer<typeof selectDriverWalletSchema>;
+export type InsertDriverWallet = z.infer<typeof insertDriverWalletSchema>;
+
+export const insertRestaurantWalletSchema = createInsertSchema(restaurantWallets);
+export const selectRestaurantWalletSchema = createSelectSchema(restaurantWallets);
+export type RestaurantWallet = z.infer<typeof selectRestaurantWalletSchema>;
+export type InsertRestaurantWallet = z.infer<typeof insertRestaurantWalletSchema>;
+
+export const insertCommissionSettingsSchema = createInsertSchema(commissionSettings);
+export const selectCommissionSettingsSchema = createSelectSchema(commissionSettings);
+export type CommissionSettings = z.infer<typeof selectCommissionSettingsSchema>;
+export type InsertCommissionSettings = z.infer<typeof insertCommissionSettingsSchema>;
+
+export const insertWithdrawalRequestSchema = createInsertSchema(withdrawalRequests);
+export const selectWithdrawalRequestSchema = createSelectSchema(withdrawalRequests);
+export type WithdrawalRequest = z.infer<typeof selectWithdrawalRequestSchema>;
+export type InsertWithdrawalRequest = z.infer<typeof insertWithdrawalRequestSchema>;
+
+export const insertDriverWorkSessionSchema = createInsertSchema(driverWorkSessions);
+export const selectDriverWorkSessionSchema = createSelectSchema(driverWorkSessions);
+export type DriverWorkSession = z.infer<typeof selectDriverWorkSessionSchema>;
+export type InsertDriverWorkSession = z.infer<typeof insertDriverWorkSessionSchema>;
+
+// Re-export driverEarnings as driverEarnings (already done above with driverEarningsTable)
+export const driverEarnings = driverEarningsTable;

@@ -651,33 +651,8 @@ router.get("/reports/restaurants/:id", async (req, res) => {
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const monthStart = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
-    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 2, now.getDate());
     
     const salesToday = deliveredOrders.filter(o => new Date(o.createdAt) >= todayStart).reduce((s, o) => s + parseFloat(o.totalAmount || o.total || "0"), 0);
-    const salesThisMonth = deliveredOrders.filter(o => new Date(o.createdAt) >= monthStart).reduce((s, o) => s + parseFloat(o.totalAmount || o.total || "0"), 0);
-    const salesPrevMonth = deliveredOrders.filter(o => new Date(o.createdAt) >= prevMonthStart && new Date(o.createdAt) < monthStart).reduce((s, o) => s + parseFloat(o.totalAmount || o.total || "0"), 0);
-    
-    // التوقعات (بناءً على متوسط الشهر الحالي)
-    const daysInMonth = 30;
-    const currentDay = now.getDate();
-    const forecastNextWeek = (salesThisMonth / currentDay) * 7;
-
-    res.json({
-      restaurant,
-      stats: {
-        totalSales,
-        totalOrders: deliveredOrders.length,
-        avgOrderValue: deliveredOrders.length > 0 ? totalSales / deliveredOrders.length : 0,
-        commission: totalCommission,
-        netAmount: totalSales - totalCommission,
-        salesToday,
-        salesThisMonth,
-        salesPrevMonth,
-        forecastNextWeek,
-        performanceVsMarket: 1.15 // 15% أعلى من المتوسط افتراضياً
-      },
-      orders: deliveredOrders.slice(0, 50)
-    });
     const salesWeek = deliveredOrders.filter(o => new Date(o.createdAt) >= weekStart).reduce((s, o) => s + parseFloat(o.totalAmount || o.total || "0"), 0);
     const salesMonth = deliveredOrders.filter(o => new Date(o.createdAt) >= monthStart).reduce((s, o) => s + parseFloat(o.totalAmount || o.total || "0"), 0);
     
