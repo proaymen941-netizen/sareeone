@@ -15,6 +15,17 @@ import { LoginPage } from "./pages/LoginPage";
 import AdminLoginPage from "./pages/admin/AdminLoginPage";
 import DriverLoginPage from "./pages/driver/DriverLoginPage";
 import AdminApp from "./pages/AdminApp";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminUiSettings from "./pages/admin/AdminUiSettings";
+import AdvancedReports from "./pages/admin/AdvancedReports";
+import RestaurantReports from "./pages/admin/RestaurantReports";
+import AdminDriversAdvanced from "./pages/AdminDriversAdvanced";
+import AdminFinancialReports from "./pages/AdminFinancialReports";
+import AdminHRManagement from "./pages/AdminHRManagement";
+import AdminRestaurantsAdvanced from "./pages/AdminRestaurantsAdvanced";
+import AdminSecurity from "./pages/AdminSecurity";
+import RatingsManagement from "./pages/RatingsManagement";
+import WalletManagement from "./pages/WalletManagement";
 import { DriverDashboard } from "./pages/DriverDashboard";
 import { useState } from "react";
 import Home from "./pages/Home";
@@ -49,7 +60,23 @@ function MainApp() {
 
   // Handle admin routes (direct access without authentication)
   if (window.location.pathname.startsWith('/admin')) {
-    return <AdminApp onLogout={() => window.location.href = '/'} />;
+    return (
+      <Switch>
+        <Route path="/admin" component={AdminApp} />
+        <Route path="/admin/dashboard" component={AdminDashboard} />
+        <Route path="/admin/ui-settings" component={AdminUiSettings} />
+        <Route path="/admin/advanced-reports" component={AdvancedReports} />
+        <Route path="/admin/restaurant-reports" component={RestaurantReports} />
+        <Route path="/admin/drivers-advanced" component={AdminDriversAdvanced} />
+        <Route path="/admin/financial-reports" component={AdminFinancialReports} />
+        <Route path="/admin/hr-management" component={AdminHRManagement} />
+        <Route path="/admin/restaurants-advanced" component={AdminRestaurantsAdvanced} />
+        <Route path="/admin/security" component={AdminSecurity} />
+        <Route path="/admin/ratings" component={RatingsManagement} />
+        <Route path="/admin/wallet" component={WalletManagement} />
+        <Route path="/admin/:rest*" component={AdminApp} />
+      </Switch>
+    );
   }
 
   // Handle driver routes (direct access without authentication)  

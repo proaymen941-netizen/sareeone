@@ -91,7 +91,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ onLogout }) =>
       
       // فلترة الطلبات غير المعينة لسائق أو المعينة لهذا السائق تحديداً (في حال تم التوجيه من الإدارة)
       const filteredOrders = Array.isArray(data) 
-        ? data.filter((order: Order) => !order.driverId || order.driverId === driverId)
+        ? data.filter((order: any) => !order.driverId || order.driverId === driverId)
         : [];
       
       console.log('الطلبات المتاحة بعد الفلترة:', filteredOrders);
